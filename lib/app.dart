@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/database/database_helper.dart';
+import 'core/database/orden_preparacion_database_helper.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/ftp_provider.dart';
+import 'presentation/providers/orden_preparacion_provider.dart';
 import 'presentation/providers/pedido_provider.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/login/login_screen.dart';
@@ -17,6 +19,7 @@ class TomaPedidosApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => PedidoProvider()),
+        ChangeNotifierProvider(create: (_) => OrdenPreparacionProvider()),
         ChangeNotifierProvider(create: (_) => FtpProvider()),
       ],
       child: MaterialApp(
@@ -92,6 +95,9 @@ class _AppRootState extends State<_AppRoot> {
     final result = await DatabaseHelper.instance.init();
     _dbState = result.state;
     _dbError = result.error;
+
+    // The orden DB auto-creates its tables; init always succeeds.
+    await OrdenPreparacionDatabaseHelper.instance.init();
 
     if (result.state == DbInitState.ok) {
       await context.read<AuthProvider>().restoreSession();

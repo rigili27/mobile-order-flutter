@@ -1,5 +1,6 @@
 import 'dart:io';
 import '../database/database_file_manager.dart';
+import '../database/orden_preparacion_database_helper.dart';
 
 /// Minimal HTTP server that lets the PC exchange the SQLite database with the
 /// device over local WiFi using only a web browser — no FTP, no firewall config.
@@ -50,6 +51,8 @@ class HttpTransferServer {
         await _handleDownload(req);
       } else if (req.method == 'GET' && path == '/backup.db') {
         await _handleBackupDownload(req);
+      } else if (req.method == 'GET' && path == '/orden_preparacion.db') {
+        await _handleOrdenPreparacionDownload(req);
       } else if (req.method == 'POST' && path == '/upload') {
         await _handleUpload(req, onImportSuccess);
       } else {
@@ -103,6 +106,25 @@ class HttpTransferServer {
       ..set('Content-Disposition', 'attachment; filename="backup_moviles.db"')
       ..contentLength = await backupFile.length();
     await req.response.addStream(backupFile.openRead());
+    await req.response.close();
+  }
+
+  Future<void> _handleOrdenPreparacionDownload(HttpRequest req) async {
+    final ordenPath = await OrdenPreparacionDatabaseHelper.instance.dbPath;
+    final ordenFile = File(ordenPath);
+    if (!await ordenFile.exists()) {
+      req.response.statusCode = HttpStatus.notFound;
+      req.response.headers.contentType = ContentType.text;
+      req.response.write('No hay órdenes de preparación disponibles.');
+      await req.response.close();
+      return;
+    }
+    req.response.headers
+      ..set(HttpHeaders.contentTypeHeader, 'application/octet-stream')
+      ..set('Content-Disposition',
+          'attachment; filename="moviles_orden_preparacion.db"')
+      ..contentLength = await ordenFile.length();
+    await req.response.addStream(ordenFile.openRead());
     await req.response.close();
   }
 
@@ -184,6 +206,11 @@ String _buildHtml(String pcPath, String vendorName, String appVersion) => '''<!D
 <div class="card">
   <h2>💾 Descargar base de datos de respaldo → PC</h2>
   <a class="btn btn-amber" href="/backup.db" download="backup_moviles.db">Descargar backup_moviles.db</a>
+</div>
+
+<div class="card">
+  <h2>📋 Descargar órdenes de preparación → PC</h2>
+  <a class="btn" style="background:#6a1b9a" href="/orden_preparacion.db" download="moviles_orden_preparacion.db">Descargar moviles_orden_preparacion.db</a>
 </div>
 
 <div class="card">

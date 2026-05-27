@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/pedido_provider.dart';
-import '../clientes/clientes_screen.dart';
 import '../articulos/articulos_screen.dart';
-import '../pedidos/pedidos_screen.dart';
-import '../pedidos/nuevo_pedido_screen.dart';
+import '../clientes/clientes_screen.dart';
 import '../login/login_screen.dart';
+import '../orden_preparacion/ordenes_preparacion_screen.dart';
+import '../pedidos/nuevo_pedido_screen.dart';
+import '../pedidos/pedidos_screen.dart';
 import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -91,6 +92,16 @@ class HomeScreen extends StatelessWidget {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PedidosScreen()),
+              ),
+            ),
+            _MenuCard(
+              icon: Icons.assignment_outlined,
+              label: 'Orden de Preparación',
+              color: Colors.purple.shade700,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const OrdenesPreparacionScreen()),
               ),
             ),
             _MenuCard(

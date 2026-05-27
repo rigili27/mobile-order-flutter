@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/database_file_manager.dart';
 import '../../../core/database/database_helper.dart';
+import '../../../core/database/orden_preparacion_database_helper.dart';
 import '../../../core/http/http_transfer_server.dart';
 import '../../../data/models/parametros.dart';
 import '../../../data/repositories/parametros_repository.dart';
@@ -91,6 +92,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ('moviles.db', 'Base activa'),
       ('backup_moviles.db', 'Respaldo'),
       ('temp.db', 'Temporal'),
+      ('moviles_orden_preparacion.db', 'Órdenes Prep.'),
     ];
     final result = <_DbFileInfo>[];
     for (final (name, label) in entries) {
@@ -256,6 +258,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (await File(backupPath).exists()) {
         files.add(XFile(backupPath,
             mimeType: 'application/octet-stream', name: 'backup_moviles.db'));
+      }
+
+      final ordenPath = await OrdenPreparacionDatabaseHelper.instance.dbPath;
+      if (await File(ordenPath).exists()) {
+        final tmpDir = await getTemporaryDirectory();
+        final dst = p.join(tmpDir.path, 'moviles_orden_preparacion.db');
+        final copy = await File(ordenPath).copy(dst);
+        files.add(XFile(copy.path,
+            mimeType: 'application/octet-stream',
+            name: 'moviles_orden_preparacion.db'));
       }
 
       if (files.isEmpty) {
