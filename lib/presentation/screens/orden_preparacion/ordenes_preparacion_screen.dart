@@ -1,7 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../../core/database/orden_preparacion_database_helper.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../data/models/cliente.dart';
 import '../../../data/models/parametros.dart';
@@ -91,6 +96,33 @@ class _OrdenesPreparacionScreenState extends State<OrdenesPreparacionScreen> {
     }
   }
 
+  Future<void> _compartirDB() async {
+    try {
+      final ordenPath = await OrdenPreparacionDatabaseHelper.instance.dbPath;
+      if (!await File(ordenPath).exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No hay órdenes para compartir.')),
+          );
+        }
+        return;
+      }
+      final tmpDir = await getTemporaryDirectory();
+      final dst = p.join(tmpDir.path, 'moviles_orden_preparacion.db');
+      final copy = await File(ordenPath).copy(dst);
+      await Share.shareXFiles(
+        [XFile(copy.path, mimeType: 'application/octet-stream', name: 'moviles_orden_preparacion.db')],
+        subject: 'Órdenes de Preparación',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al compartir: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -109,6 +141,11 @@ class _OrdenesPreparacionScreenState extends State<OrdenesPreparacionScreen> {
               tooltip: 'PDF todas las órdenes',
               onPressed: _ordenes.isEmpty ? null : _generarPdfTodos,
             ),
+          IconButton(
+            icon: const Icon(Icons.share),
+            tooltip: 'Compartir base de órdenes',
+            onPressed: _compartirDB,
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),

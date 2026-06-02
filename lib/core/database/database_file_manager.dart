@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'database_helper.dart';
+import 'orden_preparacion_database_helper.dart';
 
 class DatabaseFileManager {
   DatabaseFileManager._();
@@ -62,6 +63,7 @@ class DatabaseFileManager {
     }
 
     await helper.reopen();
+    await OrdenPreparacionDatabaseHelper.instance.clearOrders();
     return ImportResult.success();
   }
 

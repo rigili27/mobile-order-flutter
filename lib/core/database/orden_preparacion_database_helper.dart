@@ -76,4 +76,13 @@ class OrdenPreparacionDatabaseHelper {
     final path = await dbPath;
     _db = await openDatabase(path, readOnly: false);
   }
+
+  /// Elimina todas las órdenes. Se llama cada vez que se importa una nueva moviles.db.
+  Future<void> clearOrders() async {
+    if (!isOpen) return;
+    final batch = _db!.batch();
+    batch.delete('PedDMovil');
+    batch.delete('PedCMovil');
+    await batch.commit(noResult: true);
+  }
 }
