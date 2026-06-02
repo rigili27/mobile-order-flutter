@@ -11,6 +11,7 @@ import '../../../data/models/deposito.dart';
 import '../../../data/repositories/articulo_repository.dart';
 import '../../../data/repositories/cliente_repository.dart';
 import '../../../data/repositories/deposito_repository.dart';
+import '../../../data/models/pedido_cabecera.dart';
 import '../../../data/repositories/orden_preparacion_repository.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/orden_preparacion_provider.dart';
@@ -30,6 +31,7 @@ class NuevaOrdenPreparacionScreen extends StatefulWidget {
 class _NuevaOrdenPreparacionScreenState
     extends State<NuevaOrdenPreparacionScreen> {
   final _quienCtrl = TextEditingController();
+  final _notasCtrl = TextEditingController();
   String? _selectedServicio;
   final _sigController =
       SignatureController(penStrokeWidth: 3, penColor: Colors.black);
@@ -50,6 +52,7 @@ class _NuevaOrdenPreparacionScreenState
   @override
   void dispose() {
     _quienCtrl.dispose();
+    _notasCtrl.dispose();
     _sigController.dispose();
     super.dispose();
   }
@@ -88,10 +91,11 @@ class _NuevaOrdenPreparacionScreenState
     final provider = context.read<OrdenPreparacionProvider>();
     provider.loadForEdit(cabecera, cliente ?? _dummyCliente(cabecera.codCliente), items);
     _quienCtrl.text = cabecera.quienRecibio;
+    final tipo = PedidoCabecera.decodeTipo(cabecera.comentarios);
+    final notas = PedidoCabecera.decodeNotas(cabecera.comentarios);
     setState(() {
-      _selectedServicio = _servicioOpciones.contains(cabecera.comentarios)
-          ? cabecera.comentarios
-          : null;
+      _selectedServicio = _servicioOpciones.contains(tipo) ? tipo : null;
+      _notasCtrl.text = notas;
       _loadingEdit = false;
     });
   }
@@ -177,7 +181,8 @@ class _NuevaOrdenPreparacionScreenState
       if (sigData != null) provider.setFirma(sigData.toList());
     }
     provider.setQuienRecibio(_quienCtrl.text.trim());
-    provider.setComentarios(_selectedServicio ?? '');
+    provider.setComentarios(PedidoCabecera.encodeComentarios(
+        _selectedServicio ?? '', _notasCtrl.text.trim()));
 
     final idOrden = await provider.guardar(auth.vendedor!.codigo);
     if (!mounted) return;
@@ -327,6 +332,21 @@ class _NuevaOrdenPreparacionScreenState
                     ),
                   ],
                   onChanged: (v) => setState(() => _selectedServicio = v),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: TextField(
+                  controller: _notasCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Comentarios adicionales (opcional)',
+                    prefixIcon: Icon(Icons.comment_outlined),
+                    border: OutlineInputBorder(),
+                  ),
                 ),
               ),
             ),

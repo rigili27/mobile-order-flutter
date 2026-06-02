@@ -43,4 +43,24 @@ class PedidoCabecera {
         'QUIENRECIBIO': quienRecibio,
         'FIRMA': firma,
       };
+
+  // COMENTARIOS guarda "TipoServicio||NotasLibres". Ambas partes son opcionales.
+  static const _sep = '||';
+
+  static String encodeComentarios(String tipo, String notas) {
+    if (tipo.isEmpty && notas.isEmpty) return '';
+    if (notas.isEmpty) return tipo;
+    if (tipo.isEmpty) return '$_sep$notas';
+    return '$tipo$_sep$notas';
+  }
+
+  static String decodeTipo(String raw) {
+    final idx = raw.indexOf(_sep);
+    return idx < 0 ? raw : raw.substring(0, idx);
+  }
+
+  static String decodeNotas(String raw) {
+    final idx = raw.indexOf(_sep);
+    return idx < 0 ? '' : raw.substring(idx + _sep.length);
+  }
 }

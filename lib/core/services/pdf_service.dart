@@ -45,9 +45,13 @@ class PdfService {
                   fontSize: 8,
                   color: PdfColors.grey700,
                   fontStyle: pw.FontStyle.italic)),
-          if (cabecera.comentarios.isNotEmpty) ...[
+          if (PedidoCabecera.decodeTipo(cabecera.comentarios).isNotEmpty) ...[
             pw.SizedBox(height: 14),
-            _buildServicioBadge(cabecera.comentarios),
+            _buildServicioBadge(PedidoCabecera.decodeTipo(cabecera.comentarios)),
+          ],
+          if (PedidoCabecera.decodeNotas(cabecera.comentarios).isNotEmpty) ...[
+            pw.SizedBox(height: 8),
+            _buildNotasBox(PedidoCabecera.decodeNotas(cabecera.comentarios)),
           ],
           if (cabecera.quienRecibio.isNotEmpty) ...[
             pw.SizedBox(height: 8),
@@ -210,9 +214,13 @@ class PdfService {
                       fontSize: 8,
                       color: PdfColors.grey700,
                       fontStyle: pw.FontStyle.italic)),
-              if (p.comentarios.isNotEmpty) ...[
+              if (PedidoCabecera.decodeTipo(p.comentarios).isNotEmpty) ...[
                 pw.SizedBox(height: 14),
-                _buildServicioBadge(p.comentarios),
+                _buildServicioBadge(PedidoCabecera.decodeTipo(p.comentarios)),
+              ],
+              if (PedidoCabecera.decodeNotas(p.comentarios).isNotEmpty) ...[
+                pw.SizedBox(height: 8),
+                _buildNotasBox(PedidoCabecera.decodeNotas(p.comentarios)),
               ],
               if (p.quienRecibio.isNotEmpty) ...[
                 pw.SizedBox(height: 8),
@@ -247,6 +255,24 @@ class PdfService {
           style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
         ),
       ),
+    );
+  }
+
+  pw.Widget _buildNotasBox(String notas) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(8),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(width: 0.5, color: PdfColors.grey600),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+      ),
+      child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Text('Comentarios:',
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey700)),
+        pw.SizedBox(height: 3),
+        pw.Text(notas, style: const pw.TextStyle(fontSize: 10)),
+      ]),
     );
   }
 

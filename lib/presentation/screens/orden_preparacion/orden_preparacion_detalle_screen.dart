@@ -176,8 +176,10 @@ class _OrdenPreparacionDetalleScreenState
                   if (_vendedorNombre.isNotEmpty) _InfoRow('Vendedor', _vendedorNombre),
                   if (_cabecera!.quienRecibio.isNotEmpty)
                     _InfoRow('Recibió', _cabecera!.quienRecibio),
-                  if (_cabecera!.comentarios.isNotEmpty)
-                    _InfoRow('Tipo', _cabecera!.comentarios),
+                  if (PedidoCabecera.decodeTipo(_cabecera!.comentarios).isNotEmpty)
+                    _InfoRow('Tipo', PedidoCabecera.decodeTipo(_cabecera!.comentarios)),
+                  if (PedidoCabecera.decodeNotas(_cabecera!.comentarios).isNotEmpty)
+                    _InfoRow('Comentarios', PedidoCabecera.decodeNotas(_cabecera!.comentarios)),
                 ],
               ),
             ),
