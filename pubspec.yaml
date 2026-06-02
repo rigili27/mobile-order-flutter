@@ -1,7 +1,7 @@
 name: mobile_order_flutter
 description: App de toma de pedidos para vendedores - offline-first con SQLite y FTP.
 publish_to: 'none'
-version: 1.2.0+3
+version: 1.2.2+5
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
