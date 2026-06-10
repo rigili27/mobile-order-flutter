@@ -1,7 +1,7 @@
 name: mobile_order_flutter
 description: App de toma de pedidos para vendedores - offline-first con SQLite y FTP.
 publish_to: 'none'
-version: 1.2.2+5
+version: 1.2.10+13
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -28,6 +28,15 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/icon/icon.png"
 
 flutter:
   uses-material-design: true
