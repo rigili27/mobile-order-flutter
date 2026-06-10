@@ -18,6 +18,20 @@ flutter analyze
 flutter pub get
 ```
 
+## Variables de CONFIGURACION (campo ParaMovil.CONFIGURACION)
+
+Formato: `clave=valor;clave2=valor2` (separador `;`).
+Leído y parseado por `Parametros._config` → `Map<String, String>`.
+Acceso desde cualquier pantalla vía `ParametrosRepository.simboloMoneda()` (cacheado; se invalida al guardar desde ConfiguracionAvanzadaScreen).
+
+| Variable | Valores | Efecto |
+|---|---|---|
+| `moneda` | `dolar` / *(ausente)* | `dolar` → muestra `U$S` en todos los totales (pantallas + PDF); ausente/otro → muestra `$` |
+| `orden_preparacion` | `true` / *(ausente o `false`)* | `true` → muestra card "Orden de Preparación" en Home, habilita endpoint HTTP `/orden_preparacion.db` y su botón HTML, incluye la DB en compartir y en la lista de archivos; ausente/`false` → oculta todo |
+| `tipo_servicio` | `true` / *(ausente o `false`)* | `true` → muestra el selector "Tipo de servicio" en crear pedido y crear orden de preparación; ausente/`false` → oculta el selector |
+
+> Al agregar nuevas variables: documentarlas aquí y usar `ParametrosRepository.getCached()` (o `simboloMoneda()`) para acceder al valor sin consultas extra a la DB.
+
 ## Architecture
 
 **Flutter + Provider (ChangeNotifier) + sqflite. Offline-first: the entire SQLite DB is replaced wholesale on sync.**
