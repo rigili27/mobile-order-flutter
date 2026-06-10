@@ -195,11 +195,11 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   subtitle: Text(
                     '${d.sku.isNotEmpty ? 'SKU: ${d.sku} · ' : ''}'
-                    'Cant: ${d.cantidad} · P: \$${fmt.format(d.precio)}'
+                    'Cant: ${d.cantidad} · P: ${fmt.format(d.precio)}'
                     '${d.porDto > 0 ? ' · Dto: ${d.porDto}%' : ''}',
                     style: const TextStyle(fontSize: 12),
                   ),
-                  trailing: Text('\$${fmt.format(d.importe)}',
+                  trailing: Text(fmt.format(d.importe),
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               )),
@@ -208,7 +208,7 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: Text(
-              'TOTAL: \$${fmt.format(_cabecera!.total)}',
+              'TOTAL: ${(_parametros?.monedaDolar ?? false) ? 'U\$S ' : '\$'}${fmt.format(_cabecera!.total)}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),

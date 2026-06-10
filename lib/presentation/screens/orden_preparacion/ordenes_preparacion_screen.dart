@@ -36,6 +36,7 @@ class _OrdenesPreparacionScreenState extends State<OrdenesPreparacionScreen> {
   List<PedidoCabecera> _ordenes = [];
   bool _loading = true;
   bool _generatingPdf = false;
+  String _simbolo = '\$';
 
   @override
   void initState() {
@@ -49,7 +50,8 @@ class _OrdenesPreparacionScreenState extends State<OrdenesPreparacionScreen> {
     if (codVendedor != null) {
       _ordenes = await _repo.getByVendedor(codVendedor);
     }
-    if (mounted) setState(() => _loading = false);
+    final simbolo = await ParametrosRepository.simboloMoneda();
+    if (mounted) setState(() { _loading = false; _simbolo = simbolo; });
   }
 
   Future<void> _generarPdfTodos() async {
@@ -175,6 +177,7 @@ class _OrdenesPreparacionScreenState extends State<OrdenesPreparacionScreen> {
                     itemBuilder: (_, i) => _OrdenTile(
                       orden: _ordenes[i],
                       clienteRepo: _clienteRepo,
+                      simbolo: _simbolo,
                       onTap: () async {
                         await Navigator.push(
                           context,
@@ -218,12 +221,14 @@ class _OrdenTile extends StatelessWidget {
   final ClienteRepository clienteRepo;
   final VoidCallback onTap;
   final VoidCallback onEdit;
+  final String simbolo;
 
   const _OrdenTile(
       {required this.orden,
       required this.clienteRepo,
       required this.onTap,
-      required this.onEdit});
+      required this.onEdit,
+      required this.simbolo});
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +256,7 @@ class _OrdenTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('\$${fmt.format(orden.total)}',
+              Text('$simbolo${fmt.format(orden.total)}',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               if (orden.firma != null)
                 const Icon(Icons.draw, size: 14, color: Colors.green),

@@ -36,9 +36,9 @@ class PdfService {
           pw.SizedBox(height: 12),
           _buildClienteInfo(cliente),
           pw.SizedBox(height: 12),
-          _buildItemsTable(detalles),
+          _buildItemsTable(detalles, enDolares: parametros.monedaDolar),
           pw.SizedBox(height: 8),
-          _buildTotal(detalles),
+          _buildTotal(detalles, enDolares: parametros.monedaDolar),
           pw.SizedBox(height: 4),
           pw.Text('* Precios sin IVA',
               style: pw.TextStyle(
@@ -106,7 +106,7 @@ class PdfService {
     );
   }
 
-  pw.Widget _buildItemsTable(List<PedidoDetalle> detalles) {
+  pw.Widget _buildItemsTable(List<PedidoDetalle> detalles, {bool enDolares = false}) {
     final headers = ['Código', 'Descripción', 'Cant.', 'Precio', 'Dto%', 'Importe'];
     return pw.Table(
       border: pw.TableBorder.all(width: 0.5),
@@ -162,12 +162,13 @@ class PdfService {
         ),
       );
 
-  pw.Widget _buildTotal(List<PedidoDetalle> detalles) {
+  pw.Widget _buildTotal(List<PedidoDetalle> detalles, {bool enDolares = false}) {
     final total = detalles.fold<double>(0, (s, d) => s + d.importe);
+    final simbolo = enDolares ? 'U\$S ' : '\$';
     return pw.Align(
       alignment: pw.Alignment.centerRight,
       child: pw.Text(
-        'TOTAL: \$${_currencyFmt.format(total)}',
+        'TOTAL: $simbolo${_currencyFmt.format(total)}',
         style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
       ),
     );
@@ -205,9 +206,9 @@ class PdfService {
               pw.SizedBox(height: 12),
               if (cli != null) _buildClienteInfo(cli),
               pw.SizedBox(height: 12),
-              _buildItemsTable(detalles),
+              _buildItemsTable(detalles, enDolares: parametros.monedaDolar),
               pw.SizedBox(height: 8),
-              _buildTotal(detalles),
+              _buildTotal(detalles, enDolares: parametros.monedaDolar),
               pw.SizedBox(height: 4),
               pw.Text('* Precios sin IVA',
                   style: pw.TextStyle(

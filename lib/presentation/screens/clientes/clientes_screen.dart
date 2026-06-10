@@ -107,7 +107,7 @@ class _ClienteTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text('\$${fmt.format(cliente.saldo)}',
+          Text(fmt.format(cliente.saldo),
               style: TextStyle(color: saldoColor, fontWeight: FontWeight.bold, fontSize: 13)),
           const Text('saldo', style: TextStyle(fontSize: 10, color: Colors.grey)),
         ],

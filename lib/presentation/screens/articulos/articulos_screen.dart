@@ -256,7 +256,7 @@ class _ArticuloTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text('\$${fmt.format(precio)}',
+          Text(fmt.format(precio),
               style:
                   const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           Text('Lista $listaPrecios',

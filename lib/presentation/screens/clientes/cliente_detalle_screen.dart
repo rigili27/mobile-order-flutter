@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../data/models/cliente.dart';
 import '../../../data/models/pedido_cabecera.dart';
+import '../../../data/repositories/parametros_repository.dart';
 import '../../../data/repositories/pedido_repository.dart';
 import '../../providers/pedido_provider.dart';
 import '../pedidos/nuevo_pedido_screen.dart';
@@ -21,6 +22,7 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
   final _pedidoRepo = PedidoRepository();
   List<PedidoCabecera> _pedidos = [];
   bool _loadingPedidos = true;
+  String _simbolo = '\$';
 
   @override
   void initState() {
@@ -30,7 +32,8 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
 
   Future<void> _loadPedidos() async {
     final pedidos = await _pedidoRepo.getByCliente(widget.cliente.codigo);
-    if (mounted) setState(() { _pedidos = pedidos; _loadingPedidos = false; });
+    final simbolo = await ParametrosRepository.simboloMoneda();
+    if (mounted) setState(() { _pedidos = pedidos; _loadingPedidos = false; _simbolo = simbolo; });
   }
 
   void _goNuevoPedido() {
@@ -85,7 +88,7 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
                     style: TextStyle(color: saldoColor, fontSize: 14)),
                 const SizedBox(height: 4),
                 Text(
-                  '\$${fmt.format(widget.cliente.saldo)}',
+                  fmt.format(widget.cliente.saldo),
                   style: TextStyle(
                       color: saldoColor,
                       fontSize: 28,
@@ -146,6 +149,7 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
           else
             ...(_pedidos.map((p) => _PedidoClienteTile(
                   pedido: p,
+                  simbolo: _simbolo,
                   onTap: () async {
                     await Navigator.push(
                       context,
@@ -166,8 +170,9 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
 class _PedidoClienteTile extends StatelessWidget {
   final PedidoCabecera pedido;
   final VoidCallback onTap;
+  final String simbolo;
 
-  const _PedidoClienteTile({required this.pedido, required this.onTap});
+  const _PedidoClienteTile({required this.pedido, required this.onTap, required this.simbolo});
 
   @override
   Widget build(BuildContext context) {
@@ -191,7 +196,7 @@ class _PedidoClienteTile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text('\$${fmt.format(pedido.total)}',
+            Text('$simbolo${fmt.format(pedido.total)}',
                 style: const TextStyle(
                     fontWeight: FontWeight.bold, fontSize: 14)),
             if (pedido.firma != null)

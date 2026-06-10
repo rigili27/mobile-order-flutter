@@ -31,6 +31,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
   List<PedidoCabecera> _pedidos = [];
   bool _loading = true;
   bool _generatingPdf = false;
+  String _simbolo = '\$';
 
   @override
   void initState() {
@@ -44,7 +45,8 @@ class _PedidosScreenState extends State<PedidosScreen> {
     if (codVendedor != null) {
       _pedidos = await _pedidoRepo.getByVendedor(codVendedor);
     }
-    if (mounted) setState(() => _loading = false);
+    final simbolo = await ParametrosRepository.simboloMoneda();
+    if (mounted) setState(() { _loading = false; _simbolo = simbolo; });
   }
 
   Future<void> _generarPdfTodos() async {
@@ -138,6 +140,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
                     itemBuilder: (_, i) => _PedidoTile(
                       pedido: _pedidos[i],
                       clienteRepo: _clienteRepo,
+                      simbolo: _simbolo,
                       onTap: () async {
                         await Navigator.push(
                           context,
@@ -181,12 +184,14 @@ class _PedidoTile extends StatelessWidget {
   final ClienteRepository clienteRepo;
   final VoidCallback onTap;
   final VoidCallback onEdit;
+  final String simbolo;
 
   const _PedidoTile(
       {required this.pedido,
       required this.clienteRepo,
       required this.onTap,
-      required this.onEdit});
+      required this.onEdit,
+      required this.simbolo});
 
   @override
   Widget build(BuildContext context) {
@@ -214,7 +219,7 @@ class _PedidoTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('\$${fmt.format(pedido.total)}',
+              Text('$simbolo${fmt.format(pedido.total)}',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               if (pedido.firma != null)
                 const Icon(Icons.draw, size: 14, color: Colors.green),
