@@ -29,6 +29,7 @@ Acceso desde cualquier pantalla vía `ParametrosRepository.simboloMoneda()` (cac
 | `moneda` | `dolar` / *(ausente)* | `dolar` → muestra `U$S` en todos los totales (pantallas + PDF); ausente/otro → muestra `$` |
 | `orden_preparacion` | `true` / *(ausente o `false`)* | `true` → muestra card "Orden de Preparación" en Home, habilita endpoint HTTP `/orden_preparacion.db` y su botón HTML, incluye la DB en compartir y en la lista de archivos; ausente/`false` → oculta todo |
 | `tipo_servicio` | `true` / *(ausente o `false`)* | `true` → muestra el selector "Tipo de servicio" en crear pedido y crear orden de preparación; ausente/`false` → oculta el selector |
+| `pdf_leyenda_precio_sin_iva` | `true` / *(ausente o `false`)* | `true` → imprime "* Precios sin IVA" al pie del total en el PDF; ausente/`false` → omite la leyenda |
 
 > Al agregar nuevas variables: documentarlas aquí y usar `ParametrosRepository.getCached()` (o `simboloMoneda()`) para acceder al valor sin consultas extra a la DB.
 

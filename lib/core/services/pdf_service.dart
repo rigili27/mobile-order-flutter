@@ -39,12 +39,14 @@ class PdfService {
           _buildItemsTable(detalles, enDolares: parametros.monedaDolar),
           pw.SizedBox(height: 8),
           _buildTotal(detalles, enDolares: parametros.monedaDolar),
-          pw.SizedBox(height: 4),
-          pw.Text('* Precios sin IVA',
-              style: pw.TextStyle(
-                  fontSize: 8,
-                  color: PdfColors.grey700,
-                  fontStyle: pw.FontStyle.italic)),
+          if (parametros.pdfLeyendaPrecioSinIva) ...[
+            pw.SizedBox(height: 4),
+            pw.Text('* Precios sin IVA',
+                style: pw.TextStyle(
+                    fontSize: 8,
+                    color: PdfColors.grey700,
+                    fontStyle: pw.FontStyle.italic)),
+          ],
           if (PedidoCabecera.decodeTipo(cabecera.comentarios).isNotEmpty) ...[
             pw.SizedBox(height: 14),
             _buildServicioBadge(PedidoCabecera.decodeTipo(cabecera.comentarios)),
@@ -209,12 +211,14 @@ class PdfService {
               _buildItemsTable(detalles, enDolares: parametros.monedaDolar),
               pw.SizedBox(height: 8),
               _buildTotal(detalles, enDolares: parametros.monedaDolar),
-              pw.SizedBox(height: 4),
-              pw.Text('* Precios sin IVA',
-                  style: pw.TextStyle(
-                      fontSize: 8,
-                      color: PdfColors.grey700,
-                      fontStyle: pw.FontStyle.italic)),
+              if (parametros.pdfLeyendaPrecioSinIva) ...[
+                pw.SizedBox(height: 4),
+                pw.Text('* Precios sin IVA',
+                    style: pw.TextStyle(
+                        fontSize: 8,
+                        color: PdfColors.grey700,
+                        fontStyle: pw.FontStyle.italic)),
+              ],
               if (PedidoCabecera.decodeTipo(p.comentarios).isNotEmpty) ...[
                 pw.SizedBox(height: 14),
                 _buildServicioBadge(PedidoCabecera.decodeTipo(p.comentarios)),

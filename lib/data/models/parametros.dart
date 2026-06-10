@@ -30,6 +30,7 @@ class Parametros {
   bool get monedaDolar => _config['moneda'] == 'dolar';
   bool get ordenPreparacion => _config['orden_preparacion'] == 'true';
   bool get tipoServicio => _config['tipo_servicio'] == 'true';
+  bool get pdfLeyendaPrecioSinIva => _config['pdf_leyenda_precio_sin_iva'] == 'true';
 
   factory Parametros.fromMap(Map<String, dynamic> map) => Parametros(
         razonSocial: (map['RAZONSOCIAL'] as String? ?? '').trim(),
