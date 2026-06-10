@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../data/repositories/parametros_repository.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/pedido_provider.dart';
+import '../admin/configuracion_avanzada_screen.dart';
 import '../articulos/articulos_screen.dart';
 import '../clientes/clientes_screen.dart';
 import '../login/login_screen.dart';
@@ -10,12 +12,32 @@ import '../pedidos/nuevo_pedido_screen.dart';
 import '../pedidos/pedidos_screen.dart';
 import '../settings/settings_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _ordenPreparacion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reloadConfig();
+  }
+
+  Future<void> _reloadConfig() async {
+    ParametrosRepository.invalidateCache();
+    final v = await ParametrosRepository.ordenPreparacionActivo();
+    if (mounted) setState(() => _ordenPreparacion = v);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final vendedor = context.watch<AuthProvider>().vendedor;
+    final auth = context.watch<AuthProvider>();
+    final vendedor = auth.vendedor;
 
     return Scaffold(
       appBar: AppBar(
@@ -29,6 +51,16 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          if (auth.isAdmin)
+            IconButton(
+              icon: const Icon(Icons.tune),
+              tooltip: 'Configuración Avanzada',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ConfiguracionAvanzadaScreen()),
+              ).then((_) => _reloadConfig()),
+            ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar sesión',
@@ -94,16 +126,17 @@ class HomeScreen extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const PedidosScreen()),
               ),
             ),
-            _MenuCard(
-              icon: Icons.assignment_outlined,
-              label: 'Orden de Preparación',
-              color: Colors.purple.shade700,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const OrdenesPreparacionScreen()),
+            if (_ordenPreparacion)
+              _MenuCard(
+                icon: Icons.assignment_outlined,
+                label: 'Orden de Preparación',
+                color: Colors.purple.shade700,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const OrdenesPreparacionScreen()),
+                ),
               ),
-            ),
             _MenuCard(
               icon: Icons.settings,
               label: 'Configuración',

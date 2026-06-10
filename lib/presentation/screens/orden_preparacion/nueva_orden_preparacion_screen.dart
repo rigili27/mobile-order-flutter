@@ -13,6 +13,7 @@ import '../../../data/repositories/cliente_repository.dart';
 import '../../../data/repositories/deposito_repository.dart';
 import '../../../data/models/pedido_cabecera.dart';
 import '../../../data/repositories/orden_preparacion_repository.dart';
+import '../../../data/repositories/parametros_repository.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/orden_preparacion_provider.dart';
 import '../../providers/pedido_provider.dart';
@@ -36,6 +37,8 @@ class _NuevaOrdenPreparacionScreenState
   final _sigController =
       SignatureController(penStrokeWidth: 3, penColor: Colors.black);
   bool _loadingEdit = false;
+  String _simbolo = '\$';
+  bool _tipoServicio = false;
 
   static const _servicioOpciones = ['Garantía', 'Reparación', 'Reparación interna'];
 
@@ -47,6 +50,12 @@ class _NuevaOrdenPreparacionScreenState
     if (_isEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadForEdit());
     }
+    ParametrosRepository.simboloMoneda().then((s) {
+      if (mounted) setState(() => _simbolo = s);
+    });
+    ParametrosRepository.tipoServicioActivo().then((v) {
+      if (mounted) setState(() => _tipoServicio = v);
+    });
   }
 
   @override
@@ -301,40 +310,42 @@ class _NuevaOrdenPreparacionScreenState
               Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  'TOTAL: \$${fmt.format(provider.total)}',
+                  'TOTAL: $_simbolo${fmt.format(provider.total)}',
                   style:
                       const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
 
-            const SizedBox(height: 16),
-            _SectionHeader(icon: Icons.build_circle_outlined, title: 'Tipo de servicio'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: DropdownButtonFormField<String?>(
-                  decoration: const InputDecoration(
-                    labelText: 'Tipo de servicio',
-                    prefixIcon: Icon(Icons.assignment_outlined),
-                    border: OutlineInputBorder(),
+            if (_tipoServicio) ...[
+              const SizedBox(height: 16),
+              _SectionHeader(icon: Icons.build_circle_outlined, title: 'Tipo de servicio'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: DropdownButtonFormField<String?>(
+                    decoration: const InputDecoration(
+                      labelText: 'Tipo de servicio',
+                      prefixIcon: Icon(Icons.assignment_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    value: _selectedServicio,
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Sin especificar',
+                            style: TextStyle(color: Colors.grey)),
+                      ),
+                      ..._servicioOpciones.map(
+                        (s) => DropdownMenuItem<String?>(
+                            value: s, child: Text(s)),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() => _selectedServicio = v),
                   ),
-                  value: _selectedServicio,
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('Sin especificar',
-                          style: TextStyle(color: Colors.grey)),
-                    ),
-                    ..._servicioOpciones.map(
-                      (s) => DropdownMenuItem<String?>(
-                          value: s, child: Text(s)),
-                    ),
-                  ],
-                  onChanged: (v) => setState(() => _selectedServicio = v),
                 ),
               ),
-            ),
+            ],
             const SizedBox(height: 12),
             Card(
               child: Padding(
@@ -468,13 +479,13 @@ class _ItemCard extends StatelessWidget {
         title: Text(item.articulo.descripcion,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text(
-          'Cant: ${item.cantidad} · P: \$${fmt.format(item.precio)}'
+          'Cant: ${item.cantidad} · P: ${fmt.format(item.precio)}'
           '${item.porDto > 0 ? ' · Dto: ${item.porDto}%' : ''}',
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('\$${fmt.format(item.importe)}',
+            Text(fmt.format(item.importe),
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: onEdit),
             IconButton(
@@ -707,7 +718,7 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
                                     : null,
                               ),
                             ),
-                            trailing: Text('\$${art.prevtaPub1.toStringAsFixed(2)}'),
+                            trailing: Text(art.prevtaPub1.toStringAsFixed(2)),
                             onTap: () => _selectArticulo(art),
                           );
                         },

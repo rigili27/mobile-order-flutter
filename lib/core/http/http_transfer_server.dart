@@ -18,18 +18,21 @@ class HttpTransferServer {
   String _pcPath = 'C:/ftp';
   String _vendorName = '';
   String _appVersion = '';
+  bool _ordenPreparacion = false;
 
   Future<void> start({
     int port = defaultPort,
     String pcPath = 'C:/ftp',
     String vendorName = '',
     String appVersion = '',
+    bool ordenPreparacion = false,
     Future<void> Function()? onImportSuccess,
   }) async {
     if (_server != null) return;
     _pcPath = pcPath;
     _vendorName = vendorName;
     _appVersion = appVersion;
+    _ordenPreparacion = ordenPreparacion;
     _server = await HttpServer.bind(InternetAddress.anyIPv4, port);
     _server!.listen((req) => _handle(req, onImportSuccess));
   }
@@ -52,6 +55,11 @@ class HttpTransferServer {
       } else if (req.method == 'GET' && path == '/backup.db') {
         await _handleBackupDownload(req);
       } else if (req.method == 'GET' && path == '/orden_preparacion.db') {
+        if (!_ordenPreparacion) {
+          req.response.statusCode = HttpStatus.notFound;
+          await req.response.close();
+          return;
+        }
         await _handleOrdenPreparacionDownload(req);
       } else if (req.method == 'POST' && path == '/upload') {
         await _handleUpload(req, onImportSuccess);
@@ -69,7 +77,7 @@ class HttpTransferServer {
 
   Future<void> _serveHtml(HttpRequest req) async {
     req.response.headers.contentType = ContentType.html;
-    req.response.write(_buildHtml(_pcPath, _vendorName, _appVersion));
+    req.response.write(_buildHtml(_pcPath, _vendorName, _appVersion, _ordenPreparacion));
     await req.response.close();
   }
 
@@ -152,7 +160,7 @@ class HttpTransferServer {
 
 // ── HTML served to the PC browser ─────────────────────────────────────────────
 
-String _buildHtml(String pcPath, String vendorName, String appVersion) => '''<!DOCTYPE html>
+String _buildHtml(String pcPath, String vendorName, String appVersion, bool ordenPreparacion) => '''<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -208,10 +216,10 @@ String _buildHtml(String pcPath, String vendorName, String appVersion) => '''<!D
   <a class="btn btn-amber" href="/backup.db" download="backup_moviles.db">Descargar backup_moviles.db</a>
 </div>
 
-<div class="card">
+${ordenPreparacion ? '''<div class="card">
   <h2>📋 Descargar órdenes de preparación → PC</h2>
   <a class="btn" style="background:#6a1b9a" href="/orden_preparacion.db" download="moviles_orden_preparacion.db">Descargar moviles_orden_preparacion.db</a>
-</div>
+</div>''' : ''}
 
 <div class="card">
   <h2>📤 Enviar base de datos PC → celular</h2>

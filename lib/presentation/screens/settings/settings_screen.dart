@@ -88,11 +88,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadDbFiles() async {
     final dir = (await getApplicationDocumentsDirectory()).path;
-    const entries = [
+    final entries = [
       ('moviles.db', 'Base activa'),
       ('backup_moviles.db', 'Respaldo'),
       ('temp.db', 'Temporal'),
-      ('moviles_orden_preparacion.db', 'Órdenes Prep.'),
+      if (_params?.ordenPreparacion ?? false)
+        ('moviles_orden_preparacion.db', 'Órdenes Prep.'),
     ];
     final result = <_DbFileInfo>[];
     for (final (name, label) in entries) {
@@ -228,6 +229,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         pcPath: pcPath,
         vendorName: vendorName,
         appVersion: 'v${packageInfo.version}',
+        ordenPreparacion: _params?.ordenPreparacion ?? false,
         onImportSuccess: widget.onDatabaseReady);
     if (mounted) {
       setState(() {
@@ -260,14 +262,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             mimeType: 'application/octet-stream', name: 'backup_moviles.db'));
       }
 
-      final ordenPath = await OrdenPreparacionDatabaseHelper.instance.dbPath;
-      if (await File(ordenPath).exists()) {
-        final tmpDir = await getTemporaryDirectory();
-        final dst = p.join(tmpDir.path, 'moviles_orden_preparacion.db');
-        final copy = await File(ordenPath).copy(dst);
-        files.add(XFile(copy.path,
-            mimeType: 'application/octet-stream',
-            name: 'moviles_orden_preparacion.db'));
+      if (_params?.ordenPreparacion ?? false) {
+        final ordenPath = await OrdenPreparacionDatabaseHelper.instance.dbPath;
+        if (await File(ordenPath).exists()) {
+          final tmpDir = await getTemporaryDirectory();
+          final dst = p.join(tmpDir.path, 'moviles_orden_preparacion.db');
+          final copy = await File(ordenPath).copy(dst);
+          files.add(XFile(copy.path,
+              mimeType: 'application/octet-stream',
+              name: 'moviles_orden_preparacion.db'));
+        }
       }
 
       if (files.isEmpty) {
