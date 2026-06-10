@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../../core/database/database_file_manager.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../data/models/cliente.dart';
 import '../../../data/models/parametros.dart';
@@ -31,6 +34,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
   List<PedidoCabecera> _pedidos = [];
   bool _loading = true;
   bool _generatingPdf = false;
+  bool _sharingDb = false;
   String _simbolo = '\$';
 
   @override
@@ -47,6 +51,34 @@ class _PedidosScreenState extends State<PedidosScreen> {
     }
     final simbolo = await ParametrosRepository.simboloMoneda();
     if (mounted) setState(() { _loading = false; _simbolo = simbolo; });
+  }
+
+  Future<void> _compartirDB() async {
+    setState(() => _sharingDb = true);
+    try {
+      final activePath = await DatabaseFileManager.instance.activePath;
+      if (!await File(activePath).exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No hay base de datos para compartir.')),
+          );
+        }
+        return;
+      }
+      final exportFile = await DatabaseFileManager.instance.prepareExport();
+      await Share.shareXFiles(
+        [XFile(exportFile.path, mimeType: 'application/octet-stream', name: 'moviles.db')],
+        subject: 'Base de datos pedidos',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al compartir: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sharingDb = false);
+    }
   }
 
   Future<void> _generarPdfTodos() async {
@@ -99,6 +131,17 @@ class _PedidosScreenState extends State<PedidosScreen> {
       appBar: AppBar(
         title: const Text('Pedidos'),
         actions: [
+          if (_sharingDb)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.share),
+              tooltip: 'Compartir base de datos',
+              onPressed: _compartirDB,
+            ),
           if (_generatingPdf)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
