@@ -21,6 +21,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _ordenPreparacion = false;
+  bool _monedaDolar = false;
 
   @override
   void initState() {
@@ -30,8 +31,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _reloadConfig() async {
     ParametrosRepository.invalidateCache();
-    final v = await ParametrosRepository.ordenPreparacionActivo();
-    if (mounted) setState(() => _ordenPreparacion = v);
+    final orden = await ParametrosRepository.ordenPreparacionActivo();
+    final dolar = await ParametrosRepository.simboloMoneda();
+    if (mounted) {
+      setState(() {
+        _ordenPreparacion = orden;
+        _monedaDolar = dolar == 'U\$S ';
+      });
+    }
   }
 
   @override
@@ -51,6 +58,17 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            child: CircleAvatar(
+              radius: 16,
+              backgroundColor: Colors.white24,
+              child: Text(
+                _monedaDolar ? '🇺🇸' : '🇦🇷',
+                style: const TextStyle(fontSize: 18),
+              ),
+            ),
+          ),
           if (auth.isAdmin)
             IconButton(
               icon: const Icon(Icons.tune),
