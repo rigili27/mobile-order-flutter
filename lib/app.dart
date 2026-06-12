@@ -6,6 +6,7 @@ import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/ftp_provider.dart';
 import 'presentation/providers/orden_preparacion_provider.dart';
 import 'presentation/providers/pedido_provider.dart';
+import 'presentation/providers/update_provider.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/login/login_screen.dart';
 import 'presentation/screens/settings/settings_screen.dart';
@@ -21,6 +22,7 @@ class TomaPedidosApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PedidoProvider()),
         ChangeNotifierProvider(create: (_) => OrdenPreparacionProvider()),
         ChangeNotifierProvider(create: (_) => FtpProvider()),
+        ChangeNotifierProvider(create: (_) => UpdateProvider()),
       ],
       child: MaterialApp(
         title: 'Toma Pedidos',
