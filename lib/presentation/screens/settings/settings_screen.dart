@@ -15,6 +15,8 @@ import '../../../data/models/parametros.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/ftp_provider.dart';
+import '../../providers/update_provider.dart';
+import '../../widgets/update_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   /// Cuando true, la app no tiene DB y muestra la UI de "esperando base de datos".
@@ -40,6 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _httpRunning = false;
   String _wifiIp = '…';
   List<_DbFileInfo> _dbFiles = [];
+  String _appVersion = '';
 
   final _ftpIpCtrl = TextEditingController();
   final _ftpPortCtrl = TextEditingController(text: '2221');
@@ -70,10 +73,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     final pcPath = prefs.getString('http_pc_path') ?? r'C:/ftp';
+    final packageInfo = await PackageInfo.fromPlatform();
 
     if (mounted) {
       setState(() {
         _params = params;
+        _appVersion = 'v${packageInfo.version}';
         final stored = ftp.ftpAddress;
         final parts = stored.split(':');
         _ftpIpCtrl.text = parts[0];
@@ -334,6 +339,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final ftp = context.watch<FtpProvider>();
+    final upd = context.watch<UpdateProvider>();
 
     return Scaffold(
       appBar: AppBar(
@@ -343,6 +349,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // ── App / Actualizaciones ────────────────────────────────────────
+          _SectionTitle('Aplicación'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Versión instalada: ${_appVersion.isEmpty ? '…' : _appVersion}',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                  if (upd.state == UpdateState.updateAvailable &&
+                      upd.updateInfo != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Versión ${upd.updateInfo!.version} disponible',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: upd.state == UpdateState.checking
+                        ? null
+                        : () async {
+                            await upd.checkForUpdate();
+                            if (!context.mounted) return;
+                            final current = context.read<UpdateProvider>();
+                            if (current.state == UpdateState.updateAvailable) {
+                              showDialog(
+                                context: context,
+                                builder: (_) => const UpdateDialog(),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('La app está actualizada.')),
+                              );
+                            }
+                          },
+                    icon: upd.state == UpdateState.checking
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.system_update_outlined),
+                    label: Text(upd.state == UpdateState.checking
+                        ? 'Verificando...'
+                        : 'Buscar actualización'),
+                    style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 44)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // ── Banner "sin base de datos" ───────────────────────────────────
           if (widget.noDatabase) ...[
             Card(

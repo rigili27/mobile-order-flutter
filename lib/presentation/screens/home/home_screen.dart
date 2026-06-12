@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/pedido_provider.dart';
+import '../../providers/update_provider.dart';
+import '../../widgets/update_dialog.dart';
 import '../admin/configuracion_avanzada_screen.dart';
 import '../articulos/articulos_screen.dart';
 import '../clientes/clientes_screen.dart';
@@ -27,6 +29,20 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _reloadConfig();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdates());
+  }
+
+  void _checkForUpdates() {
+    context.read<UpdateProvider>().checkForUpdate().then((_) {
+      if (!mounted) return;
+      final upd = context.read<UpdateProvider>();
+      if (upd.state == UpdateState.updateAvailable && upd.updateInfo != null) {
+        showDialog(
+          context: context,
+          builder: (_) => const UpdateDialog(),
+        );
+      }
+    });
   }
 
   Future<void> _reloadConfig() async {
