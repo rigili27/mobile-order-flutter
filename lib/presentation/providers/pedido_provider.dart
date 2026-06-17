@@ -35,6 +35,7 @@ class PedidoProvider extends ChangeNotifier {
   List<int>? _existingFirma; // firma original al editar
   String _quienRecibio = '';
   String _comentarios = '';
+  int? _nroPedido;
   bool _saving = false;
   String? _errorMessage;
 
@@ -47,6 +48,7 @@ class PedidoProvider extends ChangeNotifier {
   List<int>? get firma => _firma;
   String get quienRecibio => _quienRecibio;
   String get comentarios => _comentarios;
+  int? get nroPedido => _nroPedido;
   bool get saving => _saving;
   String? get errorMessage => _errorMessage;
   bool get hasItems => _items.isNotEmpty;
@@ -97,6 +99,11 @@ class PedidoProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setNroPedido(int? v) {
+    _nroPedido = v;
+    notifyListeners();
+  }
+
   /// Carga un pedido existente para edición.
   void loadForEdit(PedidoCabecera cab, Cliente cli, List<ItemPedido> items) {
     _pedidoId = cab.id;
@@ -106,6 +113,7 @@ class PedidoProvider extends ChangeNotifier {
       ..addAll(items);
     _quienRecibio = cab.quienRecibio;
     _comentarios = cab.comentarios;
+    _nroPedido = cab.nroPedido;
     _existingFirma = cab.firma;
     _firma = null;
     _saving = false;
@@ -221,6 +229,7 @@ class PedidoProvider extends ChangeNotifier {
           codVendedor: codVendedor,
           fecha: fecha,
           comentarios: _comentarios,
+          nroPedido: _nroPedido,
           quienRecibio: _quienRecibio,
           firma: firmaFinal,
         );
@@ -265,6 +274,7 @@ class PedidoProvider extends ChangeNotifier {
     _pedidoId = null;
     _quienRecibio = '';
     _comentarios = '';
+    _nroPedido = null;
     _saving = false;
     _errorMessage = null;
     notifyListeners();

@@ -31,11 +31,13 @@ class NuevoPedidoScreen extends StatefulWidget {
 class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
   final _quienCtrl = TextEditingController();
   final _notasCtrl = TextEditingController();
+  final _nroPedidoCtrl = TextEditingController();
   String? _selectedServicio;
   final _sigController = SignatureController(penStrokeWidth: 3, penColor: Colors.black);
   bool _loadingEdit = false;
   String _simbolo = '\$';
   bool _tipoServicio = false;
+  bool _nroPedidoVisible = false;
 
   static const _servicioOpciones = ['Garantía', 'Reparación', 'Reparación interna'];
 
@@ -53,12 +55,16 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
     ParametrosRepository.tipoServicioActivo().then((v) {
       if (mounted) setState(() => _tipoServicio = v);
     });
+    ParametrosRepository.nroPedidoActivo().then((v) {
+      if (mounted) setState(() => _nroPedidoVisible = v);
+    });
   }
 
   @override
   void dispose() {
     _quienCtrl.dispose();
     _notasCtrl.dispose();
+    _nroPedidoCtrl.dispose();
     _sigController.dispose();
     super.dispose();
   }
@@ -98,6 +104,7 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
     final provider = context.read<PedidoProvider>();
     provider.loadForEdit(cabecera, cliente ?? _dummyCliente(cabecera.codCliente), items);
     _quienCtrl.text = cabecera.quienRecibio;
+    _nroPedidoCtrl.text = cabecera.nroPedido?.toString() ?? '';
     final tipo = PedidoCabecera.decodeTipo(cabecera.comentarios);
     final notas = PedidoCabecera.decodeNotas(cabecera.comentarios);
     setState(() {
@@ -196,6 +203,7 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
       final sigData = await _sigController.toPngBytes(height: 200, width: 400);
       if (sigData != null) provider.setFirma(sigData.toList());
     }
+    provider.setNroPedido(int.tryParse(_nroPedidoCtrl.text.trim()));
     provider.setQuienRecibio(_quienCtrl.text.trim());
     provider.setComentarios(PedidoCabecera.encodeComentarios(
         _selectedServicio ?? '', _notasCtrl.text.trim()));
@@ -252,6 +260,27 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // NRO PEDIDO
+            if (_nroPedidoVisible) ...[
+              _SectionHeader(icon: Icons.tag, title: 'Nro. Pedido'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: TextField(
+                    controller: _nroPedidoCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Número de pedido (opcional)',
+                      prefixIcon: Icon(Icons.tag),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // CLIENTE
             _SectionHeader(icon: Icons.person, title: 'Cliente'),
             Card(
