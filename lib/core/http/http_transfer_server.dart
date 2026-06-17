@@ -182,7 +182,7 @@ String _buildHtml(String pcPath, String vendorName, String appVersion, bool orde
   .btn-green{background:#2e7d32}.btn-green:hover{background:#1b5e20}
   .btn-amber{background:#e65100}.btn-amber:hover{background:#bf360c}
   input[type=file]{display:block;width:100%;padding:8px;margin-bottom:12px;
-                   border:1px solid #ccc;border-radius:4px}
+                   border:1px solid #ccc;border-radius:4px;background:#fff}
   #msg{margin-top:12px;padding:10px;border-radius:6px;display:none;font-size:.9rem}
   .ok{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
   .err{background:#ffebee;color:#c62828;border:1px solid #ef9a9a}
@@ -203,10 +203,10 @@ String _buildHtml(String pcPath, String vendorName, String appVersion, bool orde
 </style>
 </head>
 <body>
-<h1>Toma Pedidos — Transferencia DB</h1>
+<h1>Toma Pedidos — Transferencia</h1>
 <div class="vendor-badge">📱 Conectado al celular de ${vendorName.isNotEmpty ? vendorName : 'vendedor desconocido'}</div>
 
-<div class="card">
+<div class="card" style="background:#d3ecff">
   <h2>📥 Descargar base de datos del celular → PC</h2>
   <a class="btn" href="/moviles.db" download="moviles.db">Descargar moviles.db</a>
 </div>
@@ -221,7 +221,7 @@ ${ordenPreparacion ? '''<div class="card">
   <a class="btn" style="background:#6a1b9a" href="/orden_preparacion.db" download="moviles_orden_preparacion.db">Descargar moviles_orden_preparacion.db</a>
 </div>''' : ''}
 
-<div class="card">
+<div class="card" style="background:#e3fdeb">
   <h2>📤 Enviar base de datos PC → celular</h2>
   <input type="file" id="f" accept=".db">
   <button class="btn btn-green" onclick="confirmUpload()">Enviar al celular</button>
