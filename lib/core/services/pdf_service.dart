@@ -134,7 +134,7 @@ class PdfService {
         ),
         ...detalles.map((d) => pw.TableRow(children: [
               _cell(d.codArticulo.toString()),
-              _descCell(d.descripcionArticulo ?? '', d.sku),
+              _descCell(d.descripcionArticulo ?? '', d.sku, d.comentario),
               _cell(d.cantidad.toStringAsFixed(2)),
               _cell(_currencyFmt.format(d.precio)),
               _cell(d.porDto > 0 ? '${d.porDto.toStringAsFixed(1)}%' : ''),
@@ -151,7 +151,7 @@ class PdfService {
             textAlign: align ?? pw.TextAlign.left),
       );
 
-  pw.Widget _descCell(String descripcion, String sku) => pw.Padding(
+  pw.Widget _descCell(String descripcion, String sku, String comentario) => pw.Padding(
         padding: const pw.EdgeInsets.all(3),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -160,6 +160,10 @@ class PdfService {
             if (sku.isNotEmpty)
               pw.Text('SKU: $sku',
                   style: pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+            if (comentario.isNotEmpty)
+              pw.Text(comentario,
+                  style: pw.TextStyle(fontSize: 7, color: PdfColors.grey800,
+                      fontStyle: pw.FontStyle.italic)),
           ],
         ),
       );

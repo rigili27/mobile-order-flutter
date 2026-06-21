@@ -518,9 +518,17 @@ class _ItemCard extends StatelessWidget {
       child: ListTile(
         title: Text(item.articulo.descripcion,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text(
-          'Cant: ${item.cantidad} · P: ${fmt.format(item.precio)}'
-          '${item.porDto > 0 ? ' · Dto: ${item.porDto}%' : ''}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Cant: ${item.cantidad} · P: ${fmt.format(item.precio)}'
+              '${item.porDto > 0 ? ' · Dto: ${item.porDto}%' : ''}',
+            ),
+            if (item.comentario.isNotEmpty)
+              Text(item.comentario,
+                  style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          ],
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

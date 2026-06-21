@@ -193,11 +193,19 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
                   dense: true,
                   title: Text(d.descripcionArticulo ?? 'Cód. ${d.codArticulo}',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  subtitle: Text(
-                    '${d.sku.isNotEmpty ? 'SKU: ${d.sku} · ' : ''}'
-                    'Cant: ${d.cantidad} · P: ${fmt.format(d.precio)}'
-                    '${d.porDto > 0 ? ' · Dto: ${d.porDto}%' : ''}',
-                    style: const TextStyle(fontSize: 12),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${d.sku.isNotEmpty ? 'SKU: ${d.sku} · ' : ''}'
+                        'Cant: ${d.cantidad} · P: ${fmt.format(d.precio)}'
+                        '${d.porDto > 0 ? ' · Dto: ${d.porDto}%' : ''}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      if (d.comentario.isNotEmpty)
+                        Text(d.comentario,
+                            style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                    ],
                   ),
                   trailing: Text(fmt.format(d.importe),
                       style: const TextStyle(fontWeight: FontWeight.bold)),
