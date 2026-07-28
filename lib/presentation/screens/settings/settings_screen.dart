@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/database_file_manager.dart';
 import '../../../core/database/database_helper.dart';
 import '../../../core/database/orden_preparacion_database_helper.dart';
+import '../../../app.dart';
 import '../../../core/http/http_transfer_server.dart';
 import '../../../data/models/parametros.dart';
 import '../../../data/repositories/parametros_repository.dart';
@@ -17,6 +18,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/ftp_provider.dart';
 import '../../providers/update_provider.dart';
 import '../../widgets/update_dialog.dart';
+import '../login/login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   /// Cuando true, la app no tiene DB y muestra la UI de "esperando base de datos".
@@ -40,6 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Parametros? _params;
   final _httpServer = HttpTransferServer();
   bool _httpRunning = false;
+  bool _startingHttp = false;
   String _wifiIp = '…';
   List<_DbFileInfo> _dbFiles = [];
   String _appVersion = '';
@@ -58,6 +61,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  /// Se llama siempre que la DB activa cambió (recibida por HTTP/FTP, borrada
+  /// o restaurada desde assets). Corre el reinit que necesite el caller
+  /// (`widget.onDatabaseReady`, p. ej. `DatabaseHelper.init()` en `_AppRoot`)
+  /// y SIEMPRE fuerza logout + navegación a Login, sin importar qué usuario
+  /// estaba logueado ni desde dónde se abrió esta pantalla.
+  ///
+  /// Usa `rootNavigatorKey` en vez de `context`/`this.context` en todos los
+  /// pasos: si `widget.onDatabaseReady` viene de `_AppRoot` (arranque sin DB),
+  /// puede disparar un rebuild que reemplaza esta misma pantalla (por ejemplo
+  /// por LoginScreen) y desmonta nuestro propio BuildContext a mitad de
+  /// camino. `rootNavigatorKey.currentContext` es el del Navigator raíz, que
+  /// nunca se desmonta mientras la app corre.
+  Future<void> _onDbChanged() async {
+    try {
+      await widget.onDatabaseReady?.call();
+    } catch (_) {}
+    try {
+      await rootNavigatorKey.currentContext?.read<AuthProvider>().logout();
+    } catch (_) {}
+    rootNavigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   Future<void> _load() async {
@@ -140,9 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ftp.setAddress(_ftpAddress);
     ftp.setCredentials(_ftpUserCtrl.text.trim(), _ftpPassCtrl.text.trim());
     final ok = await ftp.importFromPc();
-    if (ok && widget.onDatabaseReady != null) {
-      await widget.onDatabaseReady!();
-    }
+    if (ok) await _onDbChanged();
   }
 
   Future<void> _confirmarImportar() async {
@@ -219,34 +245,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
             content: Text('Base de datos eliminada.'),
             backgroundColor: Colors.orange),
       );
-      widget.onDatabaseReady?.call();
+      await _onDbChanged();
     }
   }
 
   Future<void> _startHttpServer() async {
-    final ip = await NetworkInfo().getWifiIP();
-    final pcPath = _pcPathCtrl.text.trim().isEmpty ? r'C:/ftp' : _pcPathCtrl.text.trim();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('http_pc_path', pcPath);
-    final vendorName = context.read<AuthProvider>().vendedor?.nombre ?? '';
-    final packageInfo = await PackageInfo.fromPlatform();
-    await _httpServer.start(
-        pcPath: pcPath,
-        vendorName: vendorName,
-        appVersion: 'v${packageInfo.version}',
-        ordenPreparacion: _params?.ordenPreparacion ?? false,
-        onImportSuccess: widget.onDatabaseReady);
-    if (mounted) {
-      setState(() {
-        _httpRunning = true;
-        _wifiIp = ip ?? '(sin WiFi)';
-      });
+    if (_startingHttp || _httpRunning) return;
+    setState(() => _startingHttp = true);
+    try {
+      final ip = await NetworkInfo().getWifiIP();
+      final pcPath = _pcPathCtrl.text.trim().isEmpty ? r'C:/ftp' : _pcPathCtrl.text.trim();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('http_pc_path', pcPath);
+      final vendorName = context.read<AuthProvider>().vendedor?.nombre ?? '';
+      final packageInfo = await PackageInfo.fromPlatform();
+      await _httpServer.start(
+          pcPath: pcPath,
+          vendorName: vendorName,
+          appVersion: 'v${packageInfo.version}',
+          ordenPreparacion: _params?.ordenPreparacion ?? false,
+          onImportSuccess: _onDbChanged);
+      if (mounted) {
+        setState(() {
+          _httpRunning = true;
+          _wifiIp = ip ?? '(sin WiFi)';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo iniciar el servidor WiFi: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _startingHttp = false);
     }
   }
 
   Future<void> _stopHttpServer() async {
-    await _httpServer.stop();
-    if (mounted) setState(() => _httpRunning = false);
+    try {
+      await _httpServer.stop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al detener el servidor: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _httpRunning = false);
+    }
   }
 
   Future<void> _compartirDB() async {
@@ -322,7 +369,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     await DatabaseHelper.instance.deleteDatabase();
     await DatabaseHelper.instance.copyFromAssets();
-    widget.onDatabaseReady?.call();
+    await _onDbChanged();
   }
 
   @override
@@ -563,9 +610,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ] else
                   ElevatedButton.icon(
-                    onPressed: _startHttpServer,
-                    icon: const Icon(Icons.wifi),
-                    label: const Text('Iniciar servidor WiFi'),
+                    onPressed: _startingHttp ? null : _startHttpServer,
+                    icon: _startingHttp
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.wifi),
+                    label: Text(_startingHttp
+                        ? 'Iniciando…'
+                        : 'Iniciar servidor WiFi'),
                     style: ElevatedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 44),
                         backgroundColor: Colors.teal.shade700,

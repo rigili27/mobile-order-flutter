@@ -8,6 +8,7 @@ import '../../widgets/update_dialog.dart';
 import '../admin/configuracion_avanzada_screen.dart';
 import '../articulos/articulos_screen.dart';
 import '../clientes/clientes_screen.dart';
+import '../cuenta_corriente/cuenta_corriente_screen.dart';
 import '../login/login_screen.dart';
 import '../orden_preparacion/ordenes_preparacion_screen.dart';
 import '../pedidos/nuevo_pedido_screen.dart';
@@ -23,6 +24,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _ordenPreparacion = false;
+  bool _ctaCteActivo = false;
   bool _monedaDolar = false;
 
   @override
@@ -48,10 +50,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _reloadConfig() async {
     ParametrosRepository.invalidateCache();
     final orden = await ParametrosRepository.ordenPreparacionActivo();
+    final ctaCte = await ParametrosRepository.ctaCteActivo();
     final dolar = await ParametrosRepository.simboloMoneda();
     if (mounted) {
       setState(() {
         _ordenPreparacion = orden;
+        _ctaCteActivo = ctaCte;
         _monedaDolar = dolar == 'U\$S ';
       });
     }
@@ -171,28 +175,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       builder: (_) => const OrdenesPreparacionScreen()),
                 ),
               ),
+            if (_ctaCteActivo)
+              _MenuCard(
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Cuenta Corriente',
+                color: Colors.teal.shade700,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CuentaCorrienteScreen()),
+                ),
+              ),
             _MenuCard(
               icon: Icons.settings,
               label: 'Configuración',
               color: Colors.grey.shade700,
               onTap: () {
-                final ctx = context;
                 Navigator.push(
-                  ctx,
-                  MaterialPageRoute(
-                    builder: (_) => SettingsScreen(
-                      onDatabaseReady: () async {
-                        await ctx.read<AuthProvider>().logout();
-                        if (ctx.mounted) {
-                          Navigator.of(ctx).pushAndRemoveUntil(
-                            MaterialPageRoute(
-                                builder: (_) => const LoginScreen()),
-                            (route) => false,
-                          );
-                        }
-                      },
-                    ),
-                  ),
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
                 );
               },
             ),

@@ -7,6 +7,7 @@ class PedidoCabecera {
   final int? nroPedido;
   final String quienRecibio;
   final List<int>? firma;
+  final String? tipoVenta; // 'C' | 'E' | 'T' — solo si cta_cte está activo
   double total;
 
   PedidoCabecera({
@@ -18,6 +19,7 @@ class PedidoCabecera {
     this.nroPedido,
     this.quienRecibio = '',
     this.firma,
+    this.tipoVenta,
     this.total = 0,
   });
 
@@ -30,6 +32,7 @@ class PedidoCabecera {
         nroPedido: map['NROPEDIDO'] as int?,
         quienRecibio: (map['QUIENRECIBIO'] as String? ?? '').trim(),
         firma: map['FIRMA'] != null ? List<int>.from(map['FIRMA'] as List) : null,
+        tipoVenta: map['TIPOVENTA'] as String?,
         total: (map['total'] as num? ?? 0).toDouble(),
       );
 
@@ -42,6 +45,7 @@ class PedidoCabecera {
         'NROPEDIDO': nroPedido,
         'QUIENRECIBIO': quienRecibio,
         'FIRMA': firma,
+        if (tipoVenta != null) 'TIPOVENTA': tipoVenta,
       };
 
   // COMENTARIOS guarda "TipoServicio||NotasLibres". Ambas partes son opcionales.

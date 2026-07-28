@@ -32,6 +32,7 @@ class Parametros {
   bool get tipoServicio => _config['tipo_servicio'] == 'true';
   bool get pdfLeyendaPrecioSinIva => _config['pdf_leyenda_precio_sin_iva'] == 'true';
   bool get nroPedidoVisible => _config['nropedido'] == 'true';
+  bool get ctaCteActivo => _config['cta_cte'] == 'true';
 
   factory Parametros.fromMap(Map<String, dynamic> map) => Parametros(
         razonSocial: (map['RAZONSOCIAL'] as String? ?? '').trim(),

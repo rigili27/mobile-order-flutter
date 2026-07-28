@@ -26,6 +26,11 @@ class ParametrosRepository {
     return _cache!.nroPedidoVisible;
   }
 
+  static Future<bool> ctaCteActivo() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.ctaCteActivo;
+  }
+
   static void invalidateCache() => _cache = null;
 
   Future<Parametros> get() async {

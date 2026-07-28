@@ -4,6 +4,8 @@ import '../../data/models/articulo.dart';
 import '../../data/models/cliente.dart';
 import '../../data/models/pedido_cabecera.dart';
 import '../../data/models/pedido_detalle.dart';
+import '../../data/repositories/cuenta_corriente_repository.dart';
+import '../../data/repositories/parametros_repository.dart';
 import '../../data/repositories/pedido_repository.dart';
 
 class ItemPedido {
@@ -36,6 +38,7 @@ class PedidoProvider extends ChangeNotifier {
   String _quienRecibio = '';
   String _comentarios = '';
   int? _nroPedido;
+  String? _tipoVenta;
   bool _saving = false;
   String? _errorMessage;
 
@@ -49,6 +52,7 @@ class PedidoProvider extends ChangeNotifier {
   String get quienRecibio => _quienRecibio;
   String get comentarios => _comentarios;
   int? get nroPedido => _nroPedido;
+  String? get tipoVenta => _tipoVenta;
   bool get saving => _saving;
   String? get errorMessage => _errorMessage;
   bool get hasItems => _items.isNotEmpty;
@@ -104,6 +108,11 @@ class PedidoProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setTipoVenta(String? v) {
+    _tipoVenta = v;
+    notifyListeners();
+  }
+
   /// Carga un pedido existente para edición.
   void loadForEdit(PedidoCabecera cab, Cliente cli, List<ItemPedido> items) {
     _pedidoId = cab.id;
@@ -114,6 +123,7 @@ class PedidoProvider extends ChangeNotifier {
     _quienRecibio = cab.quienRecibio;
     _comentarios = cab.comentarios;
     _nroPedido = cab.nroPedido;
+    _tipoVenta = cab.tipoVenta;
     _existingFirma = cab.firma;
     _firma = null;
     _saving = false;
@@ -203,6 +213,7 @@ class PedidoProvider extends ChangeNotifier {
           nroPedido: _pedidoId,
           quienRecibio: _quienRecibio,
           firma: firmaFinal,
+          tipoVenta: _tipoVenta,
         );
         final detalles = _items
             .map((i) => PedidoDetalle(
@@ -218,6 +229,7 @@ class PedidoProvider extends ChangeNotifier {
                 ))
             .toList();
         await _repo.updatePedido(_pedidoId!, cab, detalles);
+        await _syncCuentaCorriente(_pedidoId!);
         _saving = false;
         notifyListeners();
         return _pedidoId;
@@ -232,6 +244,7 @@ class PedidoProvider extends ChangeNotifier {
           nroPedido: _nroPedido,
           quienRecibio: _quienRecibio,
           firma: firmaFinal,
+          tipoVenta: _tipoVenta,
         );
 
         final idPedido = await _repo.insertCabecera(cabecera);
@@ -253,6 +266,7 @@ class PedidoProvider extends ChangeNotifier {
         if (firmaFinal != null) {
           await _repo.updateFirma(idPedido, firmaFinal);
         }
+        await _syncCuentaCorriente(idPedido);
 
         _saving = false;
         notifyListeners();
@@ -275,9 +289,22 @@ class PedidoProvider extends ChangeNotifier {
     _quienRecibio = '';
     _comentarios = '';
     _nroPedido = null;
+    _tipoVenta = null;
     _saving = false;
     _errorMessage = null;
     notifyListeners();
+  }
+
+  /// Si cta_cte está activo, borra y recrea el movimiento de PedMCCte de este pedido.
+  Future<void> _syncCuentaCorriente(int idPedido) async {
+    if (_cliente == null) return;
+    if (!await ParametrosRepository.ctaCteActivo()) return;
+    await CuentaCorrienteRepository().syncMovimientoPedido(
+      idPedido: idPedido,
+      codCliente: _cliente!.codigo,
+      tipoVenta: _tipoVenta ?? 'C',
+      total: total,
+    );
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

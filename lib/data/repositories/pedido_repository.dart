@@ -84,6 +84,7 @@ class PedidoRepository {
     final batch = _db.db.batch();
     batch.delete('PedDMovil', where: 'IDPEDIDO = ?', whereArgs: [idPedido]);
     batch.delete('PedCMovil', where: 'ID = ?', whereArgs: [idPedido]);
+    batch.delete('PedMCCte', where: 'IDPEDMOVIL = ?', whereArgs: [idPedido]);
     await batch.commit(noResult: true);
   }
 

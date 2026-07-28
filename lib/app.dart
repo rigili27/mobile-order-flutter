@@ -11,6 +11,12 @@ import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/login/login_screen.dart';
 import 'presentation/screens/settings/settings_screen.dart';
 
+/// Navigator raíz de la app. Se usa para forzar la navegación a Login desde
+/// callbacks (p. ej. tras recibir una DB por HTTP/FTP) sin depender de un
+/// BuildContext local que puede quedar desmontado por un rebuild reactivo
+/// de `_AppRoot` (ver `AuthProvider.logout()` + `_onAuthChanged`).
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 class TomaPedidosApp extends StatelessWidget {
   const TomaPedidosApp({super.key});
 
@@ -25,6 +31,7 @@ class TomaPedidosApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => UpdateProvider()),
       ],
       child: MaterialApp(
+        navigatorKey: rootNavigatorKey,
         title: 'Toma Pedidos',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(

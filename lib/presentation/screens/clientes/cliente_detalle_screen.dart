@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../data/models/cliente.dart';
+import '../../../data/models/cuenta_corriente_movimiento.dart';
 import '../../../data/models/pedido_cabecera.dart';
+import '../../../data/repositories/cuenta_corriente_repository.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../../data/repositories/pedido_repository.dart';
 import '../../providers/pedido_provider.dart';
@@ -20,20 +23,48 @@ class ClienteDetalleScreen extends StatefulWidget {
 
 class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
   final _pedidoRepo = PedidoRepository();
+  final _ctaCteRepo = CuentaCorrienteRepository();
   List<PedidoCabecera> _pedidos = [];
+  List<CuentaCorrienteMovimiento> _movimientos = [];
   bool _loadingPedidos = true;
+  bool _loadingMovimientos = true;
   String _simbolo = '\$';
+  bool _ctaCteActivo = false;
 
   @override
   void initState() {
     super.initState();
     _loadPedidos();
+    ParametrosRepository.ctaCteActivo().then((v) {
+      if (mounted) setState(() => _ctaCteActivo = v);
+      if (v) _loadMovimientos();
+    });
   }
 
   Future<void> _loadPedidos() async {
     final pedidos = await _pedidoRepo.getByCliente(widget.cliente.codigo);
     final simbolo = await ParametrosRepository.simboloMoneda();
     if (mounted) setState(() { _pedidos = pedidos; _loadingPedidos = false; _simbolo = simbolo; });
+  }
+
+  Future<void> _loadMovimientos() async {
+    final movimientos = await _ctaCteRepo.getByCliente(widget.cliente.codigo);
+    if (mounted) {
+      setState(() {
+        _movimientos = movimientos;
+        _loadingMovimientos = false;
+      });
+    }
+  }
+
+  void _nuevoMovimientoCtaCte() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _MovimientoCtaCteSheet(codCliente: widget.cliente.codigo),
+    ).then((_) => _loadMovimientos());
   }
 
   void _goNuevoPedido() {
@@ -43,7 +74,10 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const NuevoPedidoScreen()),
-    ).then((_) => _loadPedidos());
+    ).then((_) {
+      _loadPedidos();
+      if (_ctaCteActivo) _loadMovimientos();
+    });
   }
 
   @override
@@ -56,7 +90,13 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
       appBar: AppBar(
         title: Text(widget.cliente.nombre),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadPedidos),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              _loadPedidos();
+              if (_ctaCteActivo) _loadMovimientos();
+            },
+          ),
         ],
       ),
       body: ListView(
@@ -105,6 +145,14 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
             icon: const Icon(Icons.add_shopping_cart),
             label: const Text('Nuevo Pedido para este cliente'),
           ),
+          if (_ctaCteActivo) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _nuevoMovimientoCtaCte,
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text('Nuevo movimiento de cuenta corriente'),
+            ),
+          ],
           const SizedBox(height: 24),
 
           // ── Pedidos del cliente ────────────────────────────────────────────
@@ -157,8 +205,69 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
                           builder: (_) => PedidoDetalleScreen(idPedido: p.id!)),
                     );
                     _loadPedidos();
+                    if (_ctaCteActivo) _loadMovimientos();
                   },
                 ))),
+
+          if (_ctaCteActivo) ...[
+            const SizedBox(height: 24),
+            // ── Movimientos de cuenta corriente ─────────────────────────────
+            Row(children: [
+              const Icon(Icons.account_balance_wallet_outlined,
+                  size: 18, color: Colors.grey),
+              const SizedBox(width: 6),
+              Text(
+                'MOVIMIENTOS DE CUENTA CORRIENTE',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              if (_movimientos.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Chip(
+                  label: Text('${_movimientos.length}',
+                      style: const TextStyle(fontSize: 11)),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ]),
+            const SizedBox(height: 8),
+            if (_loadingMovimientos)
+              const Center(child: CircularProgressIndicator())
+            else if (_movimientos.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(children: [
+                    Icon(Icons.account_balance_wallet_outlined,
+                        size: 40, color: Colors.grey.shade400),
+                    const SizedBox(height: 8),
+                    const Text('Sin movimientos de cuenta corriente',
+                        style: TextStyle(color: Colors.grey)),
+                  ]),
+                ),
+              )
+            else
+              ..._movimientos.map((m) => _MovimientoTile(
+                    movimiento: m,
+                    simbolo: _simbolo,
+                    onTap: m.idPedMovil == null
+                        ? null
+                        : () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => PedidoDetalleScreen(
+                                      idPedido: m.idPedMovil!)),
+                            );
+                            _loadMovimientos();
+                          },
+                  )),
+          ],
 
           const SizedBox(height: 32),
         ],
@@ -209,6 +318,51 @@ class _PedidoClienteTile extends StatelessWidget {
   }
 }
 
+class _MovimientoTile extends StatelessWidget {
+  final CuentaCorrienteMovimiento movimiento;
+  final String simbolo;
+  final VoidCallback? onTap;
+
+  const _MovimientoTile({required this.movimiento, required this.simbolo, this.onTap});
+
+  static const _tipoVentaLabels = {
+    'C': 'Cuenta Corriente',
+    'E': 'Efectivo',
+    'T': 'Transferencia',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.00', 'es_AR');
+    final esDebe = movimiento.importe < 0;
+    final color = esDebe ? Colors.red.shade700 : Colors.green.shade700;
+    final tienePedido = movimiento.idPedMovil != null;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: color.withValues(alpha: 0.15),
+          child: Icon(esDebe ? Icons.arrow_upward : Icons.arrow_downward,
+              color: color, size: 20),
+        ),
+        title: Text(tienePedido
+            ? 'Pedido #${movimiento.pedidoNro ?? movimiento.idPedMovil}'
+            : 'Movimiento manual'),
+        subtitle: Text(
+          '${_tipoVentaLabels[movimiento.tipoVenta] ?? movimiento.tipoVenta}'
+          '${movimiento.pedidoFecha != null ? ' · ${movimiento.pedidoFecha}' : ''}',
+        ),
+        trailing: Text(
+          '$simbolo${fmt.format(movimiento.importe)}',
+          style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
 class _InfoCard extends StatelessWidget {
   final List<Widget> children;
 
@@ -245,6 +399,103 @@ class _Row extends StatelessWidget {
               style: const TextStyle(
                   fontWeight: FontWeight.bold, fontSize: 13)),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Sheet para alta manual de movimiento de cuenta corriente ──────────────────
+
+class _MovimientoCtaCteSheet extends StatefulWidget {
+  final int codCliente;
+
+  const _MovimientoCtaCteSheet({required this.codCliente});
+
+  @override
+  State<_MovimientoCtaCteSheet> createState() => _MovimientoCtaCteSheetState();
+}
+
+class _MovimientoCtaCteSheetState extends State<_MovimientoCtaCteSheet> {
+  final _importeCtrl = TextEditingController();
+  String _tipoVenta = 'E';
+  bool _saving = false;
+
+  static const _tipoVentaOpciones = {
+    'E': 'Efectivo',
+    'T': 'Transferencia',
+  };
+
+  @override
+  void dispose() {
+    _importeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _confirm() async {
+    final valor = double.tryParse(_importeCtrl.text.replaceAll(',', '.')) ?? 0;
+    if (valor <= 0) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('El importe debe ser mayor a 0.')));
+      return;
+    }
+    setState(() => _saving = true);
+    await CuentaCorrienteRepository().insertManual(CuentaCorrienteMovimiento(
+      codCliente: widget.codCliente,
+      tipoVenta: _tipoVenta,
+      importe: valor.abs(),
+    ));
+    if (!mounted) return;
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Movimiento registrado.')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Nuevo movimiento de cuenta corriente',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _importeCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+            decoration: const InputDecoration(
+              labelText: 'Importe',
+              prefixIcon: Icon(Icons.attach_money),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            decoration: const InputDecoration(
+              labelText: 'Tipo de venta',
+              prefixIcon: Icon(Icons.payments_outlined),
+              border: OutlineInputBorder(),
+            ),
+            value: _tipoVenta,
+            items: _tipoVentaOpciones.entries
+                .map((e) => DropdownMenuItem<String>(value: e.key, child: Text(e.value)))
+                .toList(),
+            onChanged: (v) => setState(() => _tipoVenta = v ?? 'E'),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _saving ? null : _confirm,
+            child: const Text('Guardar'),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
     );

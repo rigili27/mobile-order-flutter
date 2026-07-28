@@ -31,6 +31,7 @@ Acceso desde cualquier pantalla vía `ParametrosRepository.simboloMoneda()` (cac
 | `tipo_servicio` | `true` / *(ausente o `false`)* | `true` → muestra el selector "Tipo de servicio" en crear pedido y crear orden de preparación; ausente/`false` → oculta el selector |
 | `pdf_leyenda_precio_sin_iva` | `true` / *(ausente o `false`)* | `true` → imprime "* Precios sin IVA" al pie del total en el PDF; ausente/`false` → omite la leyenda |
 | `nropedido` | `true` / *(ausente o `false`)* | `true` → muestra campo "Nro. Pedido" (numérico, opcional) encima del selector de cliente en crear pedido; ausente/`false` → oculta el campo |
+| `cta_cte` | `true` / *(ausente o `false`)* | `true` → habilita cobranza por cuenta corriente **solo en Pedidos** (no en Orden de Preparación): selector "Tipo de venta" (C/E/T, default C) en crear pedido, que al guardar sincroniza un movimiento en `PedMCCte` (importe negativo si C, positivo si E/T); también habilita el botón "Nuevo movimiento de cuenta corriente" en el detalle de Cliente para altas manuales; ausente/`false` → oculta todo |
 
 > Al agregar nuevas variables: documentarlas aquí y usar `ParametrosRepository.getCached()` (o `simboloMoneda()`) para acceder al valor sin consultas extra a la DB.
 
@@ -49,7 +50,8 @@ Acceso desde cualquier pantalla vía `ParametrosRepository.simboloMoneda()` (cac
 
 ### Database — critical constraints
 - **Never modify the SQLite schema.** The DB is owned by an external system (`moviles.db`). Only read/write rows, never ALTER TABLE or CREATE TABLE.
-- **Table names:** `VendMovil`, `CliMovil`, `ArtMovil`, `DepoMovil`, `PedCMovil`, `PedDMovil`, `ParaMovil`
+- **Table names:** `VendMovil`, `CliMovil`, `ArtMovil`, `DepoMovil`, `PedCMovil`, `PedDMovil`, `ParaMovil`, `PedMCCte`
+- **`PedMCCte`** (movimientos de cuenta corriente): `ID`, `IDPEDMOVIL` (nullable — null = movimiento manual sin pedido asociado), `CODCLIENTE`, `TIPOVENTA` (`C`/`E`/`T`), `IMPORTE` (negativo = debe, positivo = haber). `PedCMovil.TIPOVENTA` guarda el tipo de venta elegido en el pedido. Ver flag `cta_cte` arriba.
 - Active DB lives at `getApplicationDocumentsDirectory()/moviles.db`. Never serve this file directly over the network — always copy to `export.db` first.
 - Import sequence: receive → `temp.db` → validate (`SELECT 1 FROM VendMovil`) → backup active → rename temp → reopen. Implemented in `DatabaseFileManager.importFromTemp()`.
 

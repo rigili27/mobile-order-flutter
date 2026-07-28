@@ -38,8 +38,15 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
   String _simbolo = '\$';
   bool _tipoServicio = false;
   bool _nroPedidoVisible = false;
+  bool _ctaCteActivo = false;
+  String _tipoVenta = 'C';
 
   static const _servicioOpciones = ['Garantía', 'Reparación', 'Reparación interna'];
+  static const _tipoVentaOpciones = {
+    'C': 'Cuenta Corriente',
+    'E': 'Efectivo',
+    'T': 'Transferencia',
+  };
 
   bool get _isEditing => widget.editPedidoId != null;
 
@@ -57,6 +64,9 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
     });
     ParametrosRepository.nroPedidoActivo().then((v) {
       if (mounted) setState(() => _nroPedidoVisible = v);
+    });
+    ParametrosRepository.ctaCteActivo().then((v) {
+      if (mounted) setState(() => _ctaCteActivo = v);
     });
   }
 
@@ -110,6 +120,7 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
     setState(() {
       _selectedServicio = _servicioOpciones.contains(tipo) ? tipo : null;
       _notasCtrl.text = notas;
+      _tipoVenta = cabecera.tipoVenta ?? 'C';
       _loadingEdit = false;
     });
   }
@@ -207,6 +218,7 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
     provider.setQuienRecibio(_quienCtrl.text.trim());
     provider.setComentarios(PedidoCabecera.encodeComentarios(
         _selectedServicio ?? '', _notasCtrl.text.trim()));
+    provider.setTipoVenta(_ctaCteActivo ? _tipoVenta : null);
 
     final idPedido = await provider.guardar(auth.vendedor!.codigo);
     if (!mounted) return;
@@ -379,6 +391,31 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
                       ),
                     ],
                     onChanged: (v) => setState(() => _selectedServicio = v),
+                  ),
+                ),
+              ),
+            ],
+
+            if (_ctaCteActivo) ...[
+              const SizedBox(height: 16),
+              _SectionHeader(icon: Icons.account_balance_wallet_outlined, title: 'Tipo de venta'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Tipo de venta',
+                      prefixIcon: Icon(Icons.payments_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    value: _tipoVenta,
+                    items: _tipoVentaOpciones.entries
+                        .map((e) => DropdownMenuItem<String>(
+                              value: e.key,
+                              child: Text(e.value),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setState(() => _tipoVenta = v ?? 'C'),
                   ),
                 ),
               ),
