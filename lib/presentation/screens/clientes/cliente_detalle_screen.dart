@@ -147,10 +147,13 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
           ),
           if (_ctaCteActivo) ...[
             const SizedBox(height: 8),
-            OutlinedButton.icon(
+            ElevatedButton.icon(
               onPressed: _nuevoMovimientoCtaCte,
               icon: const Icon(Icons.account_balance_wallet_outlined),
               label: const Text('Nuevo movimiento de cuenta corriente'),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal.shade700,
+                  foregroundColor: Colors.white),
             ),
           ],
           const SizedBox(height: 24),

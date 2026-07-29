@@ -24,6 +24,15 @@ class PedidoDetalleScreen extends StatefulWidget {
   State<PedidoDetalleScreen> createState() => _PedidoDetalleScreenState();
 }
 
+const _tipoVentaLabels = {
+  'C': 'Cuenta Corriente',
+  'E': 'Efectivo',
+  'T': 'Transferencia',
+};
+
+String _tipoVentaLabel(String tipoVenta) =>
+    _tipoVentaLabels[tipoVenta] ?? tipoVenta;
+
 class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
   final _pedidoRepo = PedidoRepository();
   final _clienteRepo = ClienteRepository();
@@ -173,6 +182,8 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
                   if (_vendedorNombre.isNotEmpty) _InfoRow('Vendedor', _vendedorNombre),
                   if (_cabecera!.quienRecibio.isNotEmpty)
                     _InfoRow('Recibió', _cabecera!.quienRecibio),
+                  if ((_parametros?.ctaCteActivo ?? false) && _cabecera!.tipoVenta != null)
+                    _InfoRow('Tipo de venta', _tipoVentaLabel(_cabecera!.tipoVenta!)),
                   if (PedidoCabecera.decodeTipo(_cabecera!.comentarios).isNotEmpty)
                     _InfoRow('Tipo', PedidoCabecera.decodeTipo(_cabecera!.comentarios)),
                   if (PedidoCabecera.decodeNotas(_cabecera!.comentarios).isNotEmpty)
@@ -245,13 +256,13 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
             label: const Text('Compartir PDF'),
           ),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
+          ElevatedButton.icon(
             onPressed: _eliminarPedido,
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
-            label: const Text('Eliminar pedido',
-                style: TextStyle(color: Colors.red)),
-            style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.red)),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Eliminar pedido'),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white),
           ),
           const SizedBox(height: 16),
         ],

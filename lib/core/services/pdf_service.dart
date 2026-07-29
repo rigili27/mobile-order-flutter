@@ -7,6 +7,12 @@ import '../../data/models/parametros.dart';
 import '../../data/models/pedido_cabecera.dart';
 import '../../data/models/pedido_detalle.dart';
 
+const _tipoVentaLabels = {
+  'C': 'Cuenta Corriente',
+  'E': 'Efectivo',
+  'T': 'Transferencia',
+};
+
 class PdfService {
   PdfService._();
   static final PdfService instance = PdfService._();
@@ -87,6 +93,10 @@ class PdfService {
           pw.Text('Fecha: ${c.fecha}', style: const pw.TextStyle(fontSize: 10)),
           if (vendedorNombre.isNotEmpty)
             pw.Text('Vendedor: $vendedorNombre',
+                style: const pw.TextStyle(fontSize: 10)),
+          if (p.ctaCteActivo && c.tipoVenta != null)
+            pw.Text(
+                'Tipo de venta: ${_tipoVentaLabels[c.tipoVenta] ?? c.tipoVenta}',
                 style: const pw.TextStyle(fontSize: 10)),
         ]),
       ],
