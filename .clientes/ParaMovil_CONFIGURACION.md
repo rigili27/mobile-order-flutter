@@ -18,3 +18,11 @@ orden_preparacion=false;
 tipo_servicio=false;
 pdf_leyenda_precio_sin_iva=false;
 nropedido=false
+
+# Buchardo
+moneda=peso;
+orden_preparacion=false;
+tipo_servicio=false;
+pdf_leyenda_precio_sin_iva=false;
+nropedido=false;
+cta_cte=true
