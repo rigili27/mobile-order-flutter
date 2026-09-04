@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/api/api_config.dart';
 import '../../../data/repositories/parametros_repository.dart';
 
 class ConfiguracionAvanzadaScreen extends StatefulWidget {
@@ -14,6 +15,7 @@ class _ConfiguracionAvanzadaScreenState extends State<ConfiguracionAvanzadaScree
   bool _loading = true;
   bool _saving = false;
   bool _columnaMissing = false;
+  bool _apiMode = false;
 
   @override
   void initState() {
@@ -29,12 +31,16 @@ class _ConfiguracionAvanzadaScreenState extends State<ConfiguracionAvanzadaScree
 
   Future<void> _load() async {
     final params = await _repo.get();
+    final apiMode = await ApiConfig.isConfigured();
     setState(() {
+      _apiMode = apiMode;
       _columnaMissing = params.configuracion == null;
       _controller.text = params.configuracion ?? '';
       _loading = false;
     });
   }
+
+  bool get _readOnly => _columnaMissing || _apiMode;
 
   Future<void> _save() async {
     setState(() => _saving = true);
@@ -58,7 +64,7 @@ class _ConfiguracionAvanzadaScreenState extends State<ConfiguracionAvanzadaScree
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_columnaMissing)
+                  if (_columnaMissing || _apiMode)
                     Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(12),
@@ -67,14 +73,17 @@ class _ConfiguracionAvanzadaScreenState extends State<ConfiguracionAvanzadaScree
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.amber.shade400),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                          SizedBox(width: 8),
+                          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'La columna CONFIGURACION no existe en esta base de datos.',
-                              style: TextStyle(fontSize: 13),
+                              _apiMode
+                                  ? 'En modo API la configuración la administra el ERP '
+                                      '(Preventa → Config. de la app). Acá solo se muestra.'
+                                  : 'La columna CONFIGURACION no existe en esta base de datos.',
+                              style: const TextStyle(fontSize: 13),
                             ),
                           ),
                         ],
@@ -92,7 +101,7 @@ class _ConfiguracionAvanzadaScreenState extends State<ConfiguracionAvanzadaScree
                   const SizedBox(height: 12),
                   TextField(
                     controller: _controller,
-                    enabled: !_columnaMissing,
+                    enabled: !_readOnly,
                     maxLines: null,
                     keyboardType: TextInputType.multiline,
                     decoration: const InputDecoration(
@@ -101,10 +110,11 @@ class _ConfiguracionAvanzadaScreenState extends State<ConfiguracionAvanzadaScree
                     ),
                   ),
                   const SizedBox(height: 20),
+                  if (!_apiMode)
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: (_columnaMissing || _saving) ? null : _save,
+                      onPressed: (_readOnly || _saving) ? null : _save,
                       child: _saving
                           ? const SizedBox(
                               height: 18,

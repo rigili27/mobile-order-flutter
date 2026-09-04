@@ -22,6 +22,13 @@ class ClienteRepository {
     return rows.map(Cliente.fromMap).toList();
   }
 
+  /// Inserta en la base local un cliente recién creado en el ERP (con el
+  /// CODIGO real que devolvió la API). Sobrevive al próximo sync: el catálogo
+  /// ya lo trae porque quedó asignado al vendedor.
+  Future<void> insertLocal(Cliente cliente) async {
+    await _db.db.insert('CliMovil', cliente.toMap());
+  }
+
   Future<Cliente?> findByCodigo(int codigo) async {
     final rows = await _db.db.query(
       'CliMovil',

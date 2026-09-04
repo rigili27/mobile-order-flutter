@@ -22,6 +22,12 @@ class ArticuloRepository {
     return rows.map(Articulo.fromMap).toList();
   }
 
+  /// Inserta en la base local un artículo recién creado en el ERP (con el
+  /// CODIGO real). Queda con PENDIENTE=1 hasta que un sync lo actualice.
+  Future<void> insertLocal(Articulo articulo) async {
+    await _db.db.insert('ArtMovil', articulo.toMap());
+  }
+
   Future<Articulo?> findByCodigo(int codigo) async {
     final rows = await _db.db.query(
       'ArtMovil',

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import '../../../core/api/api_config.dart';
 import '../../../data/models/vendedor.dart';
 import '../../../data/repositories/vendedor_repository.dart';
+import '../../providers/api_sync_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../home/home_screen.dart';
+import 'qr_pairing_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +19,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _repo = VendedorRepository();
   final _claveCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   List<Vendedor> _vendors = [];
@@ -23,12 +27,20 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loadingVendors = true;
   bool _obscureClave = true;
   String _version = '';
+  bool _apiMode = false;
+  bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
-    _loadVendors();
+    _loadMode();
     _loadVersion();
+  }
+
+  Future<void> _loadMode() async {
+    final apiMode = await ApiConfig.isConfigured();
+    if (mounted) setState(() => _apiMode = apiMode);
+    if (!apiMode) _loadVendors();
   }
 
   Future<void> _loadVersion() async {
@@ -52,21 +64,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selected == null) return;
-    final ok = await context
-        .read<AuthProvider>()
-        .loginVendor(_selected!, _claveCtrl.text);
-    if (ok && mounted) {
+
+    setState(() => _submitting = true);
+    try {
+      if (_apiMode) {
+        final ok = await context
+            .read<AuthProvider>()
+            .loginConApi(_emailCtrl.text, _claveCtrl.text);
+        if (!ok || !mounted) return;
+        // Trae el catálogo actualizado tras iniciar sesión.
+        final synced =
+            await context.read<ApiSyncProvider>().sincronizarCatalogo();
+        if (!mounted) return;
+        if (!synced) {
+          final msg = context.read<ApiSyncProvider>().errorMessage;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Sesión iniciada, pero falló la sincronización: ${msg ?? 'error de red'}'),
+          ));
+        }
+      } else {
+        if (_selected == null) return;
+        final ok = await context
+            .read<AuthProvider>()
+            .loginVendor(_selected!, _claveCtrl.text);
+        if (!ok || !mounted) return;
+      }
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   @override
   void dispose() {
     _claveCtrl.dispose();
+    _emailCtrl.dispose();
     super.dispose();
   }
 
@@ -105,8 +141,23 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 32),
 
-                      // ── Selector de vendedor ────────────────────────────
-                      if (_loadingVendors)
+                      // ── Usuario o email (modo API) ─────────────────────
+                      if (_apiMode)
+                        TextFormField(
+                          controller: _emailCtrl,
+                          keyboardType: TextInputType.text,
+                          autocorrect: false,
+                          decoration: const InputDecoration(
+                            labelText: 'Usuario o email',
+                            prefixIcon: Icon(Icons.person),
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Ingresá tu usuario o email.'
+                              : null,
+                        )
+                      // ── Selector de vendedor (modo WiFi) ────────────────
+                      else if (_loadingVendors)
                         const CircularProgressIndicator()
                       else
                         DropdownButtonFormField<Vendedor>(
@@ -148,9 +199,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextFormField(
                         controller: _claveCtrl,
                         decoration: InputDecoration(
-                          labelText: _isAdminSelected
-                              ? 'Contraseña de administrador'
-                              : 'Clave (dejar vacío si no tiene)',
+                          labelText: _apiMode
+                              ? 'Contraseña'
+                              : _isAdminSelected
+                                  ? 'Contraseña de administrador'
+                                  : 'Clave (dejar vacío si no tiene)',
                           prefixIcon: const Icon(Icons.lock),
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
@@ -176,14 +229,28 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
 
                       const SizedBox(height: 24),
-                      auth.state == AuthState.loading
+                      (_submitting || auth.state == AuthState.loading)
                           ? const CircularProgressIndicator()
                           : ElevatedButton.icon(
-                              onPressed:
-                                  _selected != null ? _login : null,
+                              onPressed: (_apiMode || _selected != null)
+                                  ? _login
+                                  : null,
                               icon: const Icon(Icons.login),
                               label: const Text('Ingresar'),
                             ),
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        onPressed: (_submitting ||
+                                auth.state == AuthState.loading)
+                            ? null
+                            : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const QrPairingScreen()),
+                                ),
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('Escanear QR de acceso'),
+                      ),
                       if (_version.isNotEmpty) ...[
                         const SizedBox(height: 16),
                         Text(

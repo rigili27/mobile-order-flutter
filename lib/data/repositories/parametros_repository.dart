@@ -31,6 +31,46 @@ class ParametrosRepository {
     return _cache!.ctaCteActivo;
   }
 
+  static Future<bool> apiActivo() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.apiActivo;
+  }
+
+  static Future<bool> permitePedidos() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.permitePedidos;
+  }
+
+  static Future<bool> permiteCobranzas() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.permiteCobranzas;
+  }
+
+  static Future<bool> permiteAltaClientes() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.permiteAltaClientes;
+  }
+
+  static Future<bool> permiteAltaArticulos() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.permiteAltaArticulos;
+  }
+
+  static Future<bool> permiteVerPrecios() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.permiteVerPrecios;
+  }
+
+  static Future<bool> permiteStock() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.permiteStock;
+  }
+
+  static Future<bool> permiteGenerarCompra() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.permiteGenerarCompra;
+  }
+
   static void invalidateCache() => _cache = null;
 
   Future<Parametros> get() async {

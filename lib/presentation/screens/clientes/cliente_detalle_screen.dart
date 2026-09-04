@@ -3,12 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../data/models/cliente.dart';
+import '../../../data/models/cobranza.dart';
 import '../../../data/models/cuenta_corriente_movimiento.dart';
+import '../../../data/models/movimiento_cta_cte_vista.dart';
 import '../../../data/models/pedido_cabecera.dart';
+import '../../../core/api/api_config.dart';
 import '../../../data/repositories/cuenta_corriente_repository.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../../data/repositories/pedido_repository.dart';
 import '../../providers/pedido_provider.dart';
+import '../cobranzas/nueva_cobranza_screen.dart';
 import '../pedidos/nuevo_pedido_screen.dart';
 import '../pedidos/pedido_detalle_screen.dart';
 
@@ -25,20 +29,29 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
   final _pedidoRepo = PedidoRepository();
   final _ctaCteRepo = CuentaCorrienteRepository();
   List<PedidoCabecera> _pedidos = [];
-  List<CuentaCorrienteMovimiento> _movimientos = [];
+  List<MovimientoCtaCteVista> _movimientos = [];
   bool _loadingPedidos = true;
   bool _loadingMovimientos = true;
   String _simbolo = '\$';
   bool _ctaCteActivo = false;
+  bool _apiMode = false;
 
   @override
   void initState() {
     super.initState();
     _loadPedidos();
-    ParametrosRepository.ctaCteActivo().then((v) {
-      if (mounted) setState(() => _ctaCteActivo = v);
-      if (v) _loadMovimientos();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final ctaCte = await ParametrosRepository.ctaCteActivo();
+    final apiMode = await ApiConfig.isConfigured();
+    if (!mounted) return;
+    setState(() {
+      _ctaCteActivo = ctaCte;
+      _apiMode = apiMode;
     });
+    if (ctaCte) _loadMovimientos();
   }
 
   Future<void> _loadPedidos() async {
@@ -48,7 +61,11 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
   }
 
   Future<void> _loadMovimientos() async {
-    final movimientos = await _ctaCteRepo.getByCliente(widget.cliente.codigo);
+    final movimientos = _apiMode
+        ? await _ctaCteRepo.getVistaByCliente(widget.cliente.codigo)
+        : (await _ctaCteRepo.getByCliente(widget.cliente.codigo))
+            .map(MovimientoCtaCteVista.dePedMcCte)
+            .toList();
     if (mounted) {
       setState(() {
         _movimientos = movimientos;
@@ -57,7 +74,21 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
     }
   }
 
+  double get _cobranzasSinConfirmar => _movimientos
+      .where((m) => m.esCobranzaNoConfirmada)
+      .fold(0.0, (sum, m) => sum + m.importe);
+
   void _nuevoMovimientoCtaCte() {
+    // Modo API: la cobranza se sube al ERP como un Receipt en Borrador.
+    if (_apiMode) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => NuevaCobranzaScreen(cliente: widget.cliente),
+        ),
+      ).then((_) => _loadMovimientos());
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -124,7 +155,7 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(children: [
-                Text('Saldo',
+                Text(_cobranzasSinConfirmar > 0 ? 'Saldo confirmado' : 'Saldo',
                     style: TextStyle(color: saldoColor, fontSize: 14)),
                 const SizedBox(height: 4),
                 Text(
@@ -134,6 +165,18 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
                       fontSize: 28,
                       fontWeight: FontWeight.bold),
                 ),
+                if (_cobranzasSinConfirmar > 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Cobranzas sin confirmar: -${fmt.format(_cobranzasSinConfirmar)}',
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  Text(
+                    'Saldo proyectado: ${fmt.format(widget.cliente.saldo - _cobranzasSinConfirmar)}',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ],
               ]),
             ),
           ),
@@ -149,8 +192,12 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
             const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: _nuevoMovimientoCtaCte,
-              icon: const Icon(Icons.account_balance_wallet_outlined),
-              label: const Text('Nuevo movimiento de cuenta corriente'),
+              icon: Icon(_apiMode
+                  ? Icons.payments_outlined
+                  : Icons.account_balance_wallet_outlined),
+              label: Text(_apiMode
+                  ? 'Nueva cobranza'
+                  : 'Nuevo movimiento de cuenta corriente'),
               style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.teal.shade700,
                   foregroundColor: Colors.white),
@@ -258,14 +305,14 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
               ..._movimientos.map((m) => _MovimientoTile(
                     movimiento: m,
                     simbolo: _simbolo,
-                    onTap: m.idPedMovil == null
+                    onTap: m.idPedido == null
                         ? null
                         : () async {
                             await Navigator.push(
                               context,
                               MaterialPageRoute(
                                   builder: (_) => PedidoDetalleScreen(
-                                      idPedido: m.idPedMovil!)),
+                                      idPedido: m.idPedido!)),
                             );
                             _loadMovimientos();
                           },
@@ -322,40 +369,85 @@ class _PedidoClienteTile extends StatelessWidget {
 }
 
 class _MovimientoTile extends StatelessWidget {
-  final CuentaCorrienteMovimiento movimiento;
+  final MovimientoCtaCteVista movimiento;
   final String simbolo;
   final VoidCallback? onTap;
 
   const _MovimientoTile({required this.movimiento, required this.simbolo, this.onTap});
 
-  static const _tipoVentaLabels = {
-    'C': 'Cuenta Corriente',
-    'E': 'Efectivo',
-    'T': 'Transferencia',
+  static const _formaPagoLabels = {
+    CobranzaFormaPago.efectivo: 'Efectivo',
+    CobranzaFormaPago.cheque: 'Cheque',
+    CobranzaFormaPago.transferencia: 'Transferencia',
   };
+
+  ({String label, Color color}) _estadoChip(EstadoCobranzaSync e) {
+    switch (e) {
+      case EstadoCobranzaSync.pendienteSubir:
+        return (label: 'Pendiente de subir', color: Colors.orange);
+      case EstadoCobranzaSync.sinConfirmar:
+        return (label: 'Sin confirmar', color: Colors.blueGrey);
+      case EstadoCobranzaSync.confirmada:
+        return (label: 'Confirmada', color: Colors.green);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'es_AR');
     final esDebe = movimiento.importe < 0;
     final color = esDebe ? Colors.red.shade700 : Colors.green.shade700;
-    final tienePedido = movimiento.idPedMovil != null;
+    final esCobranza = movimiento.origen == MovimientoOrigen.cobranza;
+
+    final titulo = switch (movimiento.origen) {
+      MovimientoOrigen.pedido =>
+        'Pedido #${movimiento.idPedido}',
+      MovimientoOrigen.manual => 'Movimiento manual',
+      MovimientoOrigen.cobranza =>
+        'Cobranza · ${_formaPagoLabels[movimiento.formaPago] ?? ''}',
+    };
+
+    Widget? subtitle;
+    if (esCobranza && movimiento.estadoSync != null) {
+      final chip = _estadoChip(movimiento.estadoSync!);
+      subtitle = Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(children: [
+          if (movimiento.fecha != null) ...[
+            Text(movimiento.fecha!,
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(width: 8),
+          ],
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: chip.color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(chip.label,
+                style: TextStyle(fontSize: 11, color: chip.color)),
+          ),
+        ]),
+      );
+    } else if (movimiento.fecha != null) {
+      subtitle = Text(movimiento.fecha!);
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: color.withValues(alpha: 0.15),
-          child: Icon(esDebe ? Icons.arrow_upward : Icons.arrow_downward,
-              color: color, size: 20),
+          child: Icon(
+              esCobranza
+                  ? Icons.payments_outlined
+                  : (esDebe ? Icons.arrow_upward : Icons.arrow_downward),
+              color: color,
+              size: 20),
         ),
-        title: Text(tienePedido
-            ? 'Pedido #${movimiento.pedidoNro ?? movimiento.idPedMovil}'
-            : 'Movimiento manual'),
-        subtitle: Text(
-          '${_tipoVentaLabels[movimiento.tipoVenta] ?? movimiento.tipoVenta}'
-          '${movimiento.pedidoFecha != null ? ' · ${movimiento.pedidoFecha}' : ''}',
-        ),
+        title: Text(titulo),
+        subtitle: subtitle,
         trailing: Text(
           '$simbolo${fmt.format(movimiento.importe)}',
           style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14),

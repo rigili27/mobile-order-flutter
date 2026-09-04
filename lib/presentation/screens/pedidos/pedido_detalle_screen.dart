@@ -12,6 +12,8 @@ import '../../../data/repositories/cliente_repository.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../../data/repositories/pedido_repository.dart';
 import '../../../data/repositories/vendedor_repository.dart';
+import '../../../core/api/api_config.dart';
+import '../../../core/database/sync_state_database_helper.dart';
 import '../../providers/pedido_provider.dart';
 import 'nuevo_pedido_screen.dart';
 
@@ -45,6 +47,7 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
   Parametros? _parametros;
   String _vendedorNombre = '';
   bool _loading = true;
+  OutboxEntry? _sync;
 
   @override
   void initState() {
@@ -65,6 +68,9 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
       }
     }
     final parametros = await _paramRepo.get();
+    final sync = await ApiConfig.isConfigured()
+        ? await SyncStateDatabaseHelper.instance.find(widget.idPedido)
+        : null;
     if (mounted) {
       setState(() {
         _cabecera = cabecera;
@@ -72,9 +78,28 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
         _cliente = cliente;
         _parametros = parametros;
         _vendedorNombre = vendedorNombre;
+        _sync = sync;
         _loading = false;
       });
     }
+  }
+
+  Widget _syncChip() {
+    final sync = _sync;
+    if (sync == null) return const SizedBox.shrink();
+    final (label, color, icon) = switch (sync.estado) {
+      OutboxEstado.sincronizado => ('Sincronizado con el ERP', Colors.green, Icons.cloud_done),
+      OutboxEstado.pendiente => ('Pendiente de subir', Colors.orange, Icons.cloud_upload),
+      OutboxEstado.error => ('Error al subir — reintentá desde Configuración', Colors.red, Icons.cloud_off),
+    };
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 6),
+        Expanded(child: Text(label, style: TextStyle(fontSize: 12, color: color))),
+      ]),
+    );
   }
 
   Future<void> _editarPedido() async {
@@ -188,6 +213,7 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
                     _InfoRow('Tipo', PedidoCabecera.decodeTipo(_cabecera!.comentarios)),
                   if (PedidoCabecera.decodeNotas(_cabecera!.comentarios).isNotEmpty)
                     _InfoRow('Comentarios', PedidoCabecera.decodeNotas(_cabecera!.comentarios)),
+                  _syncChip(),
                 ],
               ),
             ),

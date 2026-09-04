@@ -4,6 +4,8 @@ import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../app_mode.dart';
+
 enum DbInitState { ok, noFile, error }
 
 class DbInitResult {
@@ -28,9 +30,20 @@ class DatabaseHelper {
 
   bool get isOpen => _db != null && _db!.isOpen;
 
+  /// Nombre del archivo de la base activa según el modo (WiFi: `moviles.db`,
+  /// API: `moviles_api.db`). Las dos conviven en el mismo directorio.
+  String get _baseName => AppMode.dbBaseName;
+
   Future<String> get dbPath async {
     final dir = await getApplicationDocumentsDirectory();
-    return join(dir.path, 'moviles.db');
+    return join(dir.path, _baseName);
+  }
+
+  /// Cierra la base actual y la reabre según el modo vigente. Se llama al
+  /// cambiar de modo (configurar / borrar el servidor API).
+  Future<DbInitResult> switchMode() async {
+    await close();
+    return init();
   }
 
   Future<DbInitResult> init() async {
@@ -82,9 +95,12 @@ class DatabaseHelper {
 
   Future<void> deleteDatabase() async {
     await close();
-    final path = await dbPath;
     final dir = (await getApplicationDocumentsDirectory()).path;
-    for (final name in ['moviles.db', 'backup_moviles.db', 'temp.db', 'export.db']) {
+    // Solo los archivos del modo vigente — la base del otro modo no se toca.
+    final names = AppMode.isApi
+        ? ['moviles_api.db', 'backup_moviles_api.db', 'temp_moviles_api.db', 'export_moviles_api.db']
+        : ['moviles.db', 'backup_moviles.db', 'temp.db', 'export.db'];
+    for (final name in names) {
       final f = File(join(dir, name));
       if (await f.exists()) await f.delete();
     }

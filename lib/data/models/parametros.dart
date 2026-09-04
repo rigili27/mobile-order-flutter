@@ -34,6 +34,22 @@ class Parametros {
   bool get nroPedidoVisible => _config['nropedido'] == 'true';
   bool get ctaCteActivo => _config['cta_cte'] == 'true';
 
+  /// Confirmación que manda el ERP de que la base viene de la API. El switch
+  /// real de modo lo maneja `ApiConfig`; esto es solo informativo.
+  bool get apiActivo => _config['api'] == 'true';
+
+  // Funciones habilitadas por vendedor (Preventa → Config. de la app). El
+  // ERP las manda siempre explícitas (`=true`/`=false`); si faltan (base
+  // vieja sin resincronizar) caen al mismo default que el backend:
+  // habilitadas las que ya existían, apagadas las nuevas.
+  bool get permitePedidos => _config['permite_pedidos'] != 'false';
+  bool get permiteCobranzas => _config['permite_cobranzas'] != 'false';
+  bool get permiteAltaClientes => _config['permite_alta_clientes'] != 'false';
+  bool get permiteAltaArticulos => _config['permite_alta_articulos'] != 'false';
+  bool get permiteVerPrecios => _config['permite_ver_precios'] != 'false';
+  bool get permiteStock => _config['permite_stock'] == 'true';
+  bool get permiteGenerarCompra => _config['permite_generar_compra'] == 'true';
+
   factory Parametros.fromMap(Map<String, dynamic> map) => Parametros(
         razonSocial: (map['RAZONSOCIAL'] as String? ?? '').trim(),
         domicilio: (map['DOMICILIO'] as String? ?? '').trim(),

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
+import '../app_mode.dart';
 import 'database_helper.dart';
 import 'orden_preparacion_database_helper.dart';
 
@@ -10,9 +11,15 @@ class DatabaseFileManager {
 
   Future<String> get _dir async => (await getApplicationDocumentsDirectory()).path;
 
-  Future<String> get activePath async => join(await _dir, 'moviles.db');
-  Future<String> get backupPath async => join(await _dir, 'backup_moviles.db');
-  Future<String> get tempPath async => join(await _dir, 'temp.db');
+  // Modo WiFi: moviles.db / backup_moviles.db / temp.db.
+  // Modo API: los mismos con sufijo _api (para no pisar la base de WiFi).
+  String get _active => AppMode.isApi ? 'moviles_api.db' : 'moviles.db';
+  String get _backup => AppMode.isApi ? 'backup_moviles_api.db' : 'backup_moviles.db';
+  String get _temp => AppMode.isApi ? 'temp_moviles_api.db' : 'temp.db';
+
+  Future<String> get activePath async => join(await _dir, _active);
+  Future<String> get backupPath async => join(await _dir, _backup);
+  Future<String> get tempPath async => join(await _dir, _temp);
 
   /// Crea una copia de la DB activa en el directorio temporal del sistema.
   /// El archivo se llama moviles.db para que al compartir/exportar tenga el nombre correcto.

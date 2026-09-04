@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/api/api_config.dart';
+import '../../core/api/preventa_api.dart';
 import '../../data/models/vendedor.dart';
 import '../../data/repositories/vendedor_repository.dart';
 
@@ -7,6 +10,7 @@ enum AuthState { initial, loading, authenticated, unauthenticated }
 
 class AuthProvider extends ChangeNotifier {
   final _repo = VendedorRepository();
+  final _api = PreventaApi();
 
   static const _keyCodigoVendedor = 'vendedor_codigo';
   static const _adminCodigo = -1;
@@ -83,6 +87,87 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Login contra la API de GestionERP (modo API). `usuario` puede ser el
+  /// nombre de usuario o el email. Devuelve true si el token se obtuvo; el
+  /// catálogo se sincroniza aparte (ver ApiSyncProvider).
+  Future<bool> loginConApi(String usuario, String password) async {
+    _state = AuthState.loading;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final codigo = await _api.login(
+        usuario: usuario.trim(),
+        password: password,
+        deviceName: '${info.appName} ${info.version}',
+      );
+
+      // El row de VendMovil puede no existir todavía (primer login, antes de
+      // sincronizar) o la base puede estar cerrada por el cambio de modo —
+      // se usa un Vendedor mínimo hasta la primera sync.
+      Vendedor? dbVendor;
+      try {
+        dbVendor = await _repo.findByCodigo(codigo);
+      } catch (_) {}
+      _vendedor = dbVendor ?? Vendedor(codigo: codigo, nombre: usuario.trim(), clave: '');
+      _state = AuthState.authenticated;
+      await _persistSession(codigo);
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('No se pudo iniciar sesión: $e');
+      return false;
+    }
+  }
+
+  /// Adopta una sesión a partir de un QR de emparejamiento: canjea el código
+  /// por un token, persiste servidor + tenant + token y deja al vendedor
+  /// autenticado. No pide usuario ni contraseña.
+  Future<bool> adoptarSesionQr({
+    required String baseUrl,
+    required String tenant,
+    required String code,
+  }) async {
+    _state = AuthState.loading;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final res = await _api.pairWithCode(
+        baseUrl: baseUrl,
+        tenant: tenant,
+        code: code,
+        deviceName: '${info.appName} ${info.version}',
+      );
+
+      await ApiConfig.setServer(baseUrl, tenant);
+      await ApiConfig.setToken(res['token'] as String);
+
+      final vendedorJson = res['vendedor'] as Map<String, dynamic>;
+      final codigo = vendedorJson['codigo'] as int;
+      _vendedor = Vendedor(
+        codigo: codigo,
+        nombre: (vendedorJson['nombre'] as String?) ?? 'Vendedor',
+        clave: '',
+      );
+      _state = AuthState.authenticated;
+      await _persistSession(codigo);
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('No se pudo vincular el dispositivo: $e');
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     // Actualizar estado primero → UI reacciona de inmediato.
     _vendedor = null;
@@ -91,6 +176,9 @@ class AuthProvider extends ChangeNotifier {
     // Limpiar sesión persistida en background (no bloquea la navegación).
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyCodigoVendedor);
+    if (await ApiConfig.isConfigured()) {
+      await _api.logout();
+    }
   }
 
   Future<void> _persistSession(int codigo) async {

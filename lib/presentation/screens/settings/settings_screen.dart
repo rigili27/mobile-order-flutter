@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/api/api_config.dart';
 import '../../../core/database/database_file_manager.dart';
 import '../../../core/database/database_helper.dart';
 import '../../../core/database/orden_preparacion_database_helper.dart';
@@ -19,6 +20,7 @@ import '../../providers/ftp_provider.dart';
 import '../../providers/update_provider.dart';
 import '../../widgets/update_dialog.dart';
 import '../login/login_screen.dart';
+import 'api_server_card.dart';
 
 class SettingsScreen extends StatefulWidget {
   /// Cuando true, la app no tiene DB y muestra la UI de "esperando base de datos".
@@ -40,6 +42,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   Parametros? _params;
+  bool _apiMode = false;
   final _httpServer = HttpTransferServer();
   bool _httpRunning = false;
   bool _startingHttp = false;
@@ -102,10 +105,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final pcPath = prefs.getString('http_pc_path') ?? r'C:/ftp';
     final packageInfo = await PackageInfo.fromPlatform();
+    final apiMode = await ApiConfig.isConfigured();
 
     if (mounted) {
       setState(() {
         _params = params;
+        _apiMode = apiMode;
         _appVersion = 'v${packageInfo.version}';
         final stored = ftp.ftpAddress;
         final parts = stored.split(':');
@@ -122,9 +127,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadDbFiles() async {
     final dir = (await getApplicationDocumentsDirectory()).path;
     final entries = [
-      ('moviles.db', 'Base activa'),
-      ('backup_moviles.db', 'Respaldo'),
-      ('temp.db', 'Temporal'),
+      ('moviles.db', _apiMode ? 'Base WiFi' : 'Base activa'),
+      ('backup_moviles.db', 'Respaldo WiFi'),
+      ('moviles_api.db', _apiMode ? 'Base activa (API)' : 'Base API'),
+      ('backup_moviles_api.db', 'Respaldo API'),
+      ('movil_sync.db', 'Estado de sync'),
       if (_params?.ordenPreparacion ?? false)
         ('moviles_orden_preparacion.db', 'Órdenes Prep.'),
     ];
@@ -458,6 +465,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 16),
 
+          // ── Servidor (API) ───────────────────────────────────────────────
+          _SectionTitle('Servidor (API)'),
+          ApiServerCard(onDatabaseReady: widget.onDatabaseReady),
+          const SizedBox(height: 16),
+
           // ── Banner "sin base de datos" ───────────────────────────────────
           if (widget.noDatabase) ...[
             Card(
@@ -484,9 +496,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 4),
                     Text(
                       widget.dbError ??
-                          'La app no tiene base de datos. '
-                              'Configurá la conexión FTP e importá desde la PC, '
-                              'o restaurá la base de datos de ejemplo.',
+                          (_apiMode
+                              ? 'La app todavía no sincronizó. Iniciá sesión en '
+                                  '"Servidor (API)" y tocá "Sincronizar catálogo".'
+                              : 'La app no tiene base de datos. Usá "Transferencia '
+                                  'WiFi" para recibirla desde la PC, o restaurá la '
+                                  'base de datos de ejemplo.'),
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 13),
                     ),
@@ -503,15 +518,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _restaurarDesdeAssets,
-              icon: const Icon(Icons.restore),
-              label: const Text('Restaurar base de datos de ejemplo'),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade700,
-                  foregroundColor: Colors.white),
-            ),
+            if (!_apiMode) ...[
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _restaurarDesdeAssets,
+                icon: const Icon(Icons.restore),
+                label: const Text('Restaurar base de datos de ejemplo'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade700,
+                    foregroundColor: Colors.white),
+              ),
+            ],
             const SizedBox(height: 24),
           ],
 
@@ -543,6 +560,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
           ],
 
+          // ── Modo WiFi: servidor + compartir DB (oculto en modo API) ──────
+          if (!_apiMode) ...[
           // ── Servidor WiFi (HTTP) ─────────────────────────────────────────
           _SectionTitle('Transferencia WiFi'),
           Card(
@@ -827,6 +846,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 24),
+          ], // fin modo WiFi
 
           // ── Archivos de base de datos ────────────────────────────────────
           ...[
@@ -891,17 +911,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(children: [
-                const Text(
-                  'Elimina la base de datos local. '
-                  'Útil si la DB está corrupta y no podés ingresar.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                Text(
+                  _apiMode
+                      ? 'Elimina la base local de la API (moviles_api.db). '
+                          'Tras esto hay que volver a sincronizar. No toca la base WiFi.'
+                      : 'Elimina la base de datos local. '
+                          'Útil si la DB está corrupta y no podés ingresar.',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: _eliminarDB,
                   icon: const Icon(Icons.delete_forever),
-                  label: const Text('Eliminar base de datos'),
+                  label: Text(_apiMode
+                      ? 'Eliminar base local (API)'
+                      : 'Eliminar base de datos'),
                   style: ElevatedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 44),
                       backgroundColor: Colors.red.shade700,

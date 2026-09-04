@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -14,8 +16,11 @@ import '../../../data/repositories/deposito_repository.dart';
 import '../../../data/models/pedido_cabecera.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../../data/repositories/pedido_repository.dart';
+import '../../../core/api/api_config.dart';
+import '../../providers/api_sync_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/pedido_provider.dart';
+import '../articulos/nuevo_articulo_dialog.dart';
 import 'pedido_detalle_screen.dart';
 
 class NuevoPedidoScreen extends StatefulWidget {
@@ -225,6 +230,13 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
 
     if (idPedido != null) {
       provider.reset();
+      // Modo API: encolar y subir el pedido al ERP (best-effort; si falla
+      // queda "pendiente" en el outbox para reintentar).
+      if (await ApiConfig.hasSession() && mounted) {
+        // ignore: use_build_context_synchronously
+        unawaited(context.read<ApiSyncProvider>().subirPedido(idPedido));
+      }
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => PedidoDetalleScreen(idPedido: idPedido)),
@@ -649,12 +661,21 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
   Articulo? _selected;
   int? _depositoSeleccionado;
   bool _scanning = false;
+  bool _apiMode = false;
+  bool _permiteAltaArticulos = true;
+  String? _barcodeSinMatch;
 
   @override
   void initState() {
     super.initState();
     _loadArticulos('');
     _searchCtrl.addListener(() => _loadArticulos(_searchCtrl.text));
+    ApiConfig.isConfigured().then((v) {
+      if (mounted) setState(() => _apiMode = v);
+    });
+    ParametrosRepository.permiteAltaArticulos().then((v) {
+      if (mounted) setState(() => _permiteAltaArticulos = v);
+    });
   }
 
   @override
@@ -696,10 +717,24 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
     if (art != null) {
       _selectArticulo(art);
     } else if (mounted) {
+      setState(() => _barcodeSinMatch = code);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se encontró producto con barcode: $code')),
       );
     }
+  }
+
+  /// Alta de artículo provisorio (solo modo API). El pedido lo usa de una vez;
+  /// el ERP lo confirma después.
+  Future<void> _nuevoArticulo() async {
+    final art = await showNuevoArticuloDialog(
+      context,
+      descripcionInicial: _searchCtrl.text.trim(),
+      barcodeInicial: _barcodeSinMatch,
+    );
+    if (art == null || !mounted) return;
+    setState(() => _barcodeSinMatch = null);
+    _selectArticulo(art);
   }
 
   void _confirm() {
@@ -782,6 +817,14 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
+              if (_apiMode && _permiteAltaArticulos) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _nuevoArticulo,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Artículo nuevo'),
+                ),
+              ],
               const SizedBox(height: 8),
               SizedBox(
                 height: 800,
@@ -817,7 +860,8 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(
                   'Cód. ${_selected!.codigo}'
-                  '${_selected!.sku.isNotEmpty ? ' · SKU: ${_selected!.sku}' : ''}',
+                  '${_selected!.sku.isNotEmpty ? ' · SKU: ${_selected!.sku}' : ''}'
+                  '${_selected!.pendiente ? ' · pendiente de confirmación' : ''}',
                 ),
                 trailing: IconButton(
                   icon: const Icon(Icons.close),

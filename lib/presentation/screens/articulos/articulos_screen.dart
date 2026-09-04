@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../../core/api/api_config.dart';
 import '../../../data/models/articulo.dart';
 import '../../../data/models/deposito.dart';
 import '../../../data/repositories/articulo_repository.dart';
 import '../../../data/repositories/deposito_repository.dart';
+import '../../../data/repositories/parametros_repository.dart';
+import 'nuevo_articulo_dialog.dart';
 
 class ArticulosScreen extends StatefulWidget {
   const ArticulosScreen({super.key});
@@ -24,6 +27,9 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
   Map<int, List<Deposito>> _stockPorArticulo = {};
   bool _loading = true;
   bool _scanning = false;
+  bool _apiMode = false;
+  bool _permiteAltaArticulos = true;
+  bool _permiteVerPrecios = true;
   int _listaPrecios = 1;
   int? _depositoFiltro;
 
@@ -33,6 +39,15 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
     _loadDepositos();
     _load('');
     _searchCtrl.addListener(() => _load(_searchCtrl.text));
+    ApiConfig.isConfigured().then((v) {
+      if (mounted) setState(() => _apiMode = v);
+    });
+    ParametrosRepository.permiteAltaArticulos().then((v) {
+      if (mounted) setState(() => _permiteAltaArticulos = v);
+    });
+    ParametrosRepository.permiteVerPrecios().then((v) {
+      if (mounted) setState(() => _permiteVerPrecios = v);
+    });
   }
 
   @override
@@ -102,6 +117,16 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
     }
 
     return Scaffold(
+      floatingActionButton: _apiMode && _permiteAltaArticulos
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                final art = await showNuevoArticuloDialog(context);
+                if (art != null) _load('');
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Nuevo artículo'),
+            )
+          : null,
       appBar: AppBar(
         title: const Text('Productos'),
         actions: [
@@ -196,6 +221,7 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
                             articulo: art,
                             listaPrecios: _listaPrecios,
                             depositos: _stockPorArticulo[art.codigo] ?? [],
+                            mostrarPrecio: _permiteVerPrecios,
                           );
                         },
                       ),
@@ -210,11 +236,13 @@ class _ArticuloTile extends StatelessWidget {
   final Articulo articulo;
   final int listaPrecios;
   final List<Deposito> depositos;
+  final bool mostrarPrecio;
 
   const _ArticuloTile({
     required this.articulo,
     required this.listaPrecios,
     required this.depositos,
+    this.mostrarPrecio = true,
   });
 
   @override
@@ -233,8 +261,24 @@ class _ArticuloTile extends StatelessWidget {
         backgroundColor: Colors.green.shade100,
         child: const Icon(Icons.inventory_2, color: Colors.green),
       ),
-      title: Text(articulo.descripcion,
-          style: const TextStyle(fontWeight: FontWeight.bold)),
+      title: Row(children: [
+        Flexible(
+          child: Text(articulo.descripcion,
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        if (articulo.pendiente) ...[
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade100,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text('Pendiente',
+                style: TextStyle(fontSize: 10, color: Colors.orange.shade900)),
+          ),
+        ],
+      ]),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -256,7 +300,7 @@ class _ArticuloTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(fmt.format(precio),
+          Text(mostrarPrecio ? fmt.format(precio) : '—',
               style:
                   const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           Text('Lista $listaPrecios',

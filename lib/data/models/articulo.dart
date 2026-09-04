@@ -11,6 +11,10 @@ class Articulo {
   final String codigoBarra;
   final String sku;
 
+  /// Artículo provisorio creado desde la app, a la espera de confirmación del
+  /// ERP. Igual se puede usar en un pedido.
+  final bool pendiente;
+
   const Articulo({
     required this.codigo,
     required this.descripcion,
@@ -23,6 +27,7 @@ class Articulo {
     this.moneda,
     required this.codigoBarra,
     required this.sku,
+    this.pendiente = false,
   });
 
   factory Articulo.fromMap(Map<String, dynamic> map) => Articulo(
@@ -37,7 +42,23 @@ class Articulo {
         moneda: map['MONEDA'] as int?,
         codigoBarra: (map['CODIGOBARRA'] as String? ?? '').trim(),
         sku: (map['SKU'] as String? ?? '').trim(),
+        pendiente: (map['PENDIENTE'] as int? ?? 0) == 1,
       );
+
+  Map<String, dynamic> toMap() => {
+        'CODIGO': codigo,
+        'DESCRIPCION': descripcion,
+        'UNIDAD': unidad,
+        'STOCKACTUAL': stockActual,
+        'PREVTAPUB1': prevtaPub1,
+        'PREVTAPUB2': prevtaPub2,
+        'PREVTAPUB3': prevtaPub3,
+        'ALICUTA': alicuota,
+        'MONEDA': moneda,
+        'CODIGOBARRA': codigoBarra,
+        'SKU': sku,
+        'PENDIENTE': pendiente ? 1 : 0,
+      };
 
   double precioParaLista(int nrolPrecios) {
     return switch (nrolPrecios) {

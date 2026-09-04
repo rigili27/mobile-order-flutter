@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/api/api_config.dart';
 import '../../../data/models/cliente.dart';
 import '../../../data/repositories/cliente_repository.dart';
+import '../../../data/repositories/parametros_repository.dart';
 import 'cliente_detalle_screen.dart';
+import 'nuevo_cliente_screen.dart';
 
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
@@ -16,12 +19,20 @@ class _ClientesScreenState extends State<ClientesScreen> {
   final _searchCtrl = TextEditingController();
   List<Cliente> _clientes = [];
   bool _loading = true;
+  bool _apiMode = false;
+  bool _permiteAltaClientes = true;
 
   @override
   void initState() {
     super.initState();
     _load('');
     _searchCtrl.addListener(() => _load(_searchCtrl.text));
+    ApiConfig.isConfigured().then((v) {
+      if (mounted) setState(() => _apiMode = v);
+    });
+    ParametrosRepository.permiteAltaClientes().then((v) {
+      if (mounted) setState(() => _permiteAltaClientes = v);
+    });
   }
 
   @override
@@ -40,6 +51,19 @@ class _ClientesScreenState extends State<ClientesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Clientes')),
+      floatingActionButton: _apiMode && _permiteAltaClientes
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                final creado = await Navigator.push<Cliente>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NuevoClienteScreen()),
+                );
+                if (creado != null) _load('');
+              },
+              icon: const Icon(Icons.person_add),
+              label: const Text('Nuevo cliente'),
+            )
+          : null,
       body: Column(
         children: [
           Padding(
@@ -63,7 +87,20 @@ class _ClientesScreenState extends State<ClientesScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _clientes.isEmpty
-                    ? const Center(child: Text('Sin resultados'))
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            _searchCtrl.text.isNotEmpty
+                                ? 'Sin resultados'
+                                : _apiMode
+                                    ? 'No tenés clientes asignados.\nPedile a administración que te asigne clientes en el ERP, o probá "Sincronizar" en Configuración.'
+                                    : 'Sin clientes. Sincronizá la base desde Configuración.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      )
                     : ListView.builder(
                         itemCount: _clientes.length,
                         itemBuilder: (_, i) => _ClienteTile(

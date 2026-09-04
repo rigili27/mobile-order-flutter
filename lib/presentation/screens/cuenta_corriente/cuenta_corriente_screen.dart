@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../data/models/cuenta_corriente_movimiento.dart';
+import '../../../data/models/cobranza.dart';
+import '../../../data/models/movimiento_cta_cte_vista.dart';
 import '../../../data/repositories/cuenta_corriente_repository.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../pedidos/pedido_detalle_screen.dart';
 
 /// Listado global de movimientos de cuenta corriente (todos los clientes).
+/// En modo API incluye las cobranzas registradas desde la app, incluso las
+/// que el ERP todavía no confirmó.
 class CuentaCorrienteScreen extends StatefulWidget {
   const CuentaCorrienteScreen({super.key});
 
@@ -15,7 +18,7 @@ class CuentaCorrienteScreen extends StatefulWidget {
 
 class _CuentaCorrienteScreenState extends State<CuentaCorrienteScreen> {
   final _repo = CuentaCorrienteRepository();
-  List<CuentaCorrienteMovimiento> _movimientos = [];
+  List<MovimientoCtaCteVista> _movimientos = [];
   bool _loading = true;
   String _simbolo = '\$';
 
@@ -27,7 +30,7 @@ class _CuentaCorrienteScreenState extends State<CuentaCorrienteScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final movimientos = await _repo.getAll();
+    final movimientos = await _repo.getVistaAll();
     final simbolo = await ParametrosRepository.simboloMoneda();
     if (mounted) {
       setState(() {
@@ -76,15 +79,21 @@ class _CuentaCorrienteScreenState extends State<CuentaCorrienteScreen> {
 }
 
 class _MovimientoTile extends StatelessWidget {
-  final CuentaCorrienteMovimiento movimiento;
+  final MovimientoCtaCteVista movimiento;
   final String simbolo;
 
   const _MovimientoTile({required this.movimiento, required this.simbolo});
 
-  static const _tipoVentaLabels = {
-    'C': 'Cuenta Corriente',
-    'E': 'Efectivo',
-    'T': 'Transferencia',
+  static const _formaPagoLabels = {
+    CobranzaFormaPago.efectivo: 'Efectivo',
+    CobranzaFormaPago.cheque: 'Cheque',
+    CobranzaFormaPago.transferencia: 'Transferencia',
+  };
+
+  static const _estadoLabels = {
+    EstadoCobranzaSync.pendienteSubir: 'Pendiente de subir',
+    EstadoCobranzaSync.sinConfirmar: 'Sin confirmar',
+    EstadoCobranzaSync.confirmada: 'Confirmada',
   };
 
   @override
@@ -92,25 +101,38 @@ class _MovimientoTile extends StatelessWidget {
     final fmt = NumberFormat('#,##0.00', 'es_AR');
     final esDebe = movimiento.importe < 0;
     final color = esDebe ? Colors.red.shade700 : Colors.green.shade700;
-    final tienePedido = movimiento.idPedMovil != null;
+    final esCobranza = movimiento.origen == MovimientoOrigen.cobranza;
+    final tienePedido = movimiento.idPedido != null;
+
+    final subtitlePartes = <String>[
+      if (esCobranza)
+        'Cobranza · ${_formaPagoLabels[movimiento.formaPago] ?? ''}'
+      else if (tienePedido)
+        'Pedido'
+      else
+        'Movimiento manual',
+      if (movimiento.fecha != null) movimiento.fecha!,
+      if (esCobranza && movimiento.estadoSync != null)
+        _estadoLabels[movimiento.estadoSync!]!,
+    ];
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: color.withValues(alpha: 0.15),
-          child: Icon(esDebe ? Icons.arrow_upward : Icons.arrow_downward,
-              color: color, size: 20),
+          child: Icon(
+              esCobranza
+                  ? Icons.payments_outlined
+                  : (esDebe ? Icons.arrow_upward : Icons.arrow_downward),
+              color: color,
+              size: 20),
         ),
         title: Text(
           movimiento.clienteNombre ?? 'Cliente ${movimiento.codCliente}',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(
-          '${_tipoVentaLabels[movimiento.tipoVenta] ?? movimiento.tipoVenta}'
-          '${tienePedido ? ' · Pedido #${movimiento.pedidoNro ?? movimiento.idPedMovil}'
-              '${movimiento.pedidoFecha != null ? ' · ${movimiento.pedidoFecha}' : ''}' : ' (manual)'}',
-        ),
+        subtitle: Text(subtitlePartes.join(' · ')),
         trailing: Text(
           '$simbolo${fmt.format(movimiento.importe)}',
           style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14),
@@ -120,7 +142,7 @@ class _MovimientoTile extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                       builder: (_) =>
-                          PedidoDetalleScreen(idPedido: movimiento.idPedMovil!)),
+                          PedidoDetalleScreen(idPedido: movimiento.idPedido!)),
                 )
             : null,
       ),
