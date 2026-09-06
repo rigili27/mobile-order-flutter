@@ -9,6 +9,14 @@ class Cliente {
   final int nrolPrecios;
   final double saldo;
 
+  /// Id de la lista de precio real del cliente en el ERP (modo API). En modo
+  /// WiFi es null y se usa [nrolPrecios] (slot 1..3).
+  final int? codLista;
+
+  /// Cliente dado de alta desde la app, a la espera de que el ERP lo revise.
+  /// Igual se le pueden cargar pedidos.
+  final bool pendiente;
+
   const Cliente({
     required this.codigo,
     required this.nombre,
@@ -19,6 +27,8 @@ class Cliente {
     this.codCatIva,
     required this.nrolPrecios,
     required this.saldo,
+    this.codLista,
+    this.pendiente = false,
   });
 
   factory Cliente.fromMap(Map<String, dynamic> map) => Cliente(
@@ -31,6 +41,8 @@ class Cliente {
         codCatIva: map['CODCATIVA'] as int?,
         nrolPrecios: (map['NROLPRECIOS'] as int?) ?? 1,
         saldo: (map['SALDO'] as num? ?? 0).toDouble(),
+        codLista: map['COD_LISTA'] as int?,
+        pendiente: (map['PENDIENTE'] as int? ?? 0) == 1,
       );
 
   Map<String, dynamic> toMap() => {
@@ -43,5 +55,7 @@ class Cliente {
         'CODCATIVA': codCatIva,
         'NROLPRECIOS': nrolPrecios,
         'SALDO': saldo,
+        'COD_LISTA': codLista,
+        'PENDIENTE': pendiente ? 1 : 0,
       };
 }

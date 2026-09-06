@@ -663,6 +663,8 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
   bool _scanning = false;
   bool _apiMode = false;
   bool _permiteAltaArticulos = true;
+  bool _permiteStockNegativo = true;
+  int? _depositoAsignado;
   String? _barcodeSinMatch;
 
   @override
@@ -675,6 +677,12 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
     });
     ParametrosRepository.permiteAltaArticulos().then((v) {
       if (mounted) setState(() => _permiteAltaArticulos = v);
+    });
+    ParametrosRepository.permiteStockNegativo().then((v) {
+      if (mounted) setState(() => _permiteStockNegativo = v);
+    });
+    ParametrosRepository.depositoAsignado().then((v) {
+      if (mounted) setState(() => _depositoAsignado = v);
     });
   }
 
@@ -746,6 +754,17 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('La cantidad debe ser mayor a 0.')));
       return;
+    }
+    if (_apiMode && _depositoAsignado != null && !_permiteStockNegativo) {
+      final disp = _depositos
+          .where((d) => d.codigo == _depositoSeleccionado)
+          .fold<double>(0, (s, d) => s + d.stock);
+      if (cantidad > disp) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Sin stock suficiente en tu depósito (disponible: ${disp.toStringAsFixed(2)}).')));
+        return;
+      }
     }
     context.read<PedidoProvider>().addItem(ItemPedido(
           articulo: _selected!,

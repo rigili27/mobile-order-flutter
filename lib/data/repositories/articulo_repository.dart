@@ -1,25 +1,57 @@
 import '../../core/database/database_helper.dart';
 import '../models/articulo.dart';
+import '../models/lista_precio.dart';
 
 class ArticuloRepository {
   final _db = DatabaseHelper.instance;
 
+  /// Convierte filas de ArtMovil en [Articulo], adjuntando los precios por
+  /// lista real del ERP (tabla ArtMovilPrecio) si existen. Una sola query
+  /// para todo el lote.
+  Future<List<Articulo>> _map(List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return const [];
+    List<Map<String, Object?>> precios = const [];
+    try {
+      precios = await _db.db.query('ArtMovilPrecio');
+    } catch (_) {
+      // Base vieja sin la tabla (modo WiFi): se usan los slots.
+    }
+    final porArticulo = <int, List<Map<String, Object?>>>{};
+    for (final p in precios) {
+      porArticulo.putIfAbsent(p['COD_ARTICULO'] as int, () => []).add(p);
+    }
+    return rows.map((r) {
+      final m = Map<String, dynamic>.from(r);
+      m['__precios'] = porArticulo[r['CODIGO'] as int] ?? const [];
+      return Articulo.fromMap(m);
+    }).toList();
+  }
+
   Future<List<Articulo>> getAll() async {
-    final rows = await _db.db.query('ArtMovil', orderBy: 'DESCRIPCION');
-    return rows.map(Articulo.fromMap).toList();
+    return _map(await _db.db.query('ArtMovil', orderBy: 'DESCRIPCION'));
+  }
+
+  /// Listas de precio del ERP (modo API). Vacío en modo WiFi.
+  Future<List<ListaPrecio>> getListas() async {
+    try {
+      final rows =
+          await _db.db.query('ListaPrecioMovil', orderBy: 'NOMBRE');
+      return rows.map(ListaPrecio.fromMap).toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<List<Articulo>> search(String query) async {
     if (query.trim().isEmpty) return getAll();
     final q = '%${query.trim()}%';
-    final rows = await _db.db.rawQuery(
+    return _map(await _db.db.rawQuery(
       '''SELECT * FROM ArtMovil
          WHERE DESCRIPCION LIKE ? OR CODIGOBARRA LIKE ? OR SKU LIKE ?
          OR CAST(CODIGO AS TEXT) LIKE ?
          ORDER BY DESCRIPCION''',
       [q, q, q, q],
-    );
-    return rows.map(Articulo.fromMap).toList();
+    ));
   }
 
   /// Inserta en la base local un artículo recién creado en el ERP (con el
@@ -36,7 +68,7 @@ class ArticuloRepository {
       limit: 1,
     );
     if (rows.isEmpty) return null;
-    return Articulo.fromMap(rows.first);
+    return (await _map(rows)).first;
   }
 
   Future<List<Articulo>> searchByDeposito(String query, int depositoCodigo) async {
@@ -50,7 +82,7 @@ class ArticuloRepository {
          ORDER BY a.DESCRIPCION''',
       hasQuery ? [depositoCodigo, q, q, q, q] : [depositoCodigo],
     );
-    return rows.map(Articulo.fromMap).toList();
+    return _map(rows);
   }
 
   Future<Articulo?> findByBarcode(String barcode) async {
@@ -60,6 +92,6 @@ class ArticuloRepository {
       [barcode, barcode],
     );
     if (rows.isEmpty) return null;
-    return Articulo.fromMap(rows.first);
+    return (await _map(rows)).first;
   }
 }

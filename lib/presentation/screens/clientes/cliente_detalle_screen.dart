@@ -11,7 +11,9 @@ import '../../../core/api/api_config.dart';
 import '../../../data/repositories/cuenta_corriente_repository.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../../data/repositories/pedido_repository.dart';
+import '../../providers/api_sync_provider.dart';
 import '../../providers/pedido_provider.dart';
+import '../../widgets/sync_header.dart';
 import '../cobranzas/nueva_cobranza_screen.dart';
 import '../pedidos/nuevo_pedido_screen.dart';
 import '../pedidos/pedido_detalle_screen.dart';
@@ -30,11 +32,16 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
   final _ctaCteRepo = CuentaCorrienteRepository();
   List<PedidoCabecera> _pedidos = [];
   List<MovimientoCtaCteVista> _movimientos = [];
+  List<CtaCteDetalleMovimiento> _detalleErp = [];
+  DateTime? _ctaCteLastSync;
+  bool _syncingCtaCte = false;
   bool _loadingPedidos = true;
   bool _loadingMovimientos = true;
   String _simbolo = '\$';
   bool _ctaCteActivo = false;
   bool _apiMode = false;
+
+  String get _ctaCteResourceKey => 'cta_cte:${widget.cliente.codigo}';
 
   @override
   void initState() {
@@ -51,7 +58,52 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
       _ctaCteActivo = ctaCte;
       _apiMode = apiMode;
     });
-    if (ctaCte) _loadMovimientos();
+    if (ctaCte) {
+      _loadMovimientos();
+      if (apiMode) _initCtaCteErp();
+    }
+  }
+
+  Future<void> _initCtaCteErp() async {
+    final last = await context
+        .read<ApiSyncProvider>()
+        .resourceLastSync(_ctaCteResourceKey);
+    if (mounted) setState(() => _ctaCteLastSync = last);
+    await _loadDetalleErp();
+    // Auto-sync si nunca se trajo o quedó viejo (> 15 min).
+    if (last == null ||
+        DateTime.now().difference(last) > const Duration(minutes: 15)) {
+      _syncCtaCteErp();
+    }
+  }
+
+  Future<void> _loadDetalleErp() async {
+    final detalle = await _ctaCteRepo.getDetalle(widget.cliente.codigo);
+    if (mounted) setState(() => _detalleErp = detalle);
+  }
+
+  Future<void> _syncCtaCteErp() async {
+    if (_syncingCtaCte) return;
+    setState(() => _syncingCtaCte = true);
+    final ok = await context
+        .read<ApiSyncProvider>()
+        .syncCuentaCorriente(widget.cliente.codigo);
+    if (!mounted) return;
+    final last = await context
+        .read<ApiSyncProvider>()
+        .resourceLastSync(_ctaCteResourceKey);
+    await _loadDetalleErp();
+    if (!mounted) return;
+    setState(() {
+      _syncingCtaCte = false;
+      _ctaCteLastSync = last;
+    });
+    if (!ok) {
+      final msg = context.read<ApiSyncProvider>().errorMessage;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('No se pudo sincronizar la cuenta corriente'
+              '${msg != null ? ': $msg' : ''}')));
+    }
   }
 
   Future<void> _loadPedidos() async {
@@ -125,7 +177,10 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: () {
               _loadPedidos();
-              if (_ctaCteActivo) _loadMovimientos();
+              if (_ctaCteActivo) {
+                _loadMovimientos();
+                if (_apiMode) _syncCtaCteErp();
+              }
             },
           ),
         ],
@@ -145,6 +200,28 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
             _Row(Icons.price_change, 'Lista de precios',
                 'Lista ${widget.cliente.nrolPrecios}'),
           ]),
+          if (widget.cliente.pendiente) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Icon(Icons.hourglass_empty,
+                    size: 16, color: Colors.orange.shade900),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Cliente pendiente de aprobación del ERP. Podés cargarle pedidos igual.',
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                  ),
+                ),
+              ]),
+            ),
+          ],
           const SizedBox(height: 16),
 
           // ── Saldo ──────────────────────────────────────────────────────────
@@ -259,7 +336,56 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
                   },
                 ))),
 
-          if (_ctaCteActivo) ...[
+          if (_ctaCteActivo && _apiMode) ...[
+            const SizedBox(height: 24),
+            Row(children: [
+              const Icon(Icons.account_balance_wallet_outlined,
+                  size: 18, color: Colors.grey),
+              const SizedBox(width: 6),
+              Text(
+                'CUENTA CORRIENTE',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SyncHeader(
+                lastSync: _ctaCteLastSync,
+                syncing: _syncingCtaCte,
+                onSync: _syncCtaCteErp,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_detalleErp.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(children: [
+                    Icon(Icons.account_balance_wallet_outlined,
+                        size: 40, color: Colors.grey.shade400),
+                    const SizedBox(height: 8),
+                    Text(
+                        _ctaCteLastSync == null
+                            ? 'Sincronizá para ver la cuenta corriente'
+                            : 'Sin movimientos de cuenta corriente',
+                        style: const TextStyle(color: Colors.grey)),
+                  ]),
+                ),
+              )
+            else
+              ..._detalleErp.reversed.map((m) => _CtaCteErpTile(
+                    movimiento: m,
+                    simbolo: _simbolo,
+                  )),
+          ],
+
+          if (_ctaCteActivo && !_apiMode) ...[
             const SizedBox(height: 24),
             // ── Movimientos de cuenta corriente ─────────────────────────────
             Row(children: [
@@ -453,6 +579,48 @@ class _MovimientoTile extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14),
         ),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// Fila del extracto de cuenta corriente traído del ERP (modo API).
+class _CtaCteErpTile extends StatelessWidget {
+  final CtaCteDetalleMovimiento movimiento;
+  final String simbolo;
+
+  const _CtaCteErpTile({required this.movimiento, required this.simbolo});
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.00', 'es_AR');
+    final esDebe = movimiento.tipo == 'debe';
+    final monto = esDebe ? movimiento.debe : movimiento.haber;
+    final color = esDebe ? Colors.red.shade700 : Colors.green.shade700;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        dense: true,
+        leading: Icon(
+            esDebe ? Icons.arrow_upward : Icons.arrow_downward,
+            color: color,
+            size: 20),
+        title: Text(movimiento.detalle.isEmpty ? '—' : movimiento.detalle,
+            style: const TextStyle(fontSize: 13)),
+        subtitle: Text(movimiento.fecha,
+            style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('${esDebe ? '' : '-'}$simbolo${fmt.format(monto)}',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+            Text('Saldo: $simbolo${fmt.format(movimiento.saldo)}',
+                style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          ],
+        ),
       ),
     );
   }

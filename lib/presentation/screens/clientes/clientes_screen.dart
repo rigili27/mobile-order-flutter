@@ -4,6 +4,7 @@ import '../../../core/api/api_config.dart';
 import '../../../data/models/cliente.dart';
 import '../../../data/repositories/cliente_repository.dart';
 import '../../../data/repositories/parametros_repository.dart';
+import '../../widgets/app_list_card.dart';
 import 'cliente_detalle_screen.dart';
 import 'nuevo_cliente_screen.dart';
 
@@ -102,6 +103,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                         ),
                       )
                     : ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
                         itemCount: _clientes.length,
                         itemBuilder: (_, i) => _ClienteTile(
                           cliente: _clientes[i],
@@ -130,16 +132,11 @@ class _ClienteTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'es_AR');
     final saldoColor = cliente.saldo > 0 ? Colors.red.shade700 : Colors.green.shade700;
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        child: Text(
-          cliente.codigo.toString(),
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-        ),
-      ),
-      title: Text(cliente.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(cliente.localidad.isNotEmpty ? cliente.localidad : cliente.domicilio),
+    return AppListCard(
+      leadingText: cliente.codigo.toString(),
+      title: cliente.nombre,
+      badge: cliente.pendiente ? 'Pendiente' : null,
+      subtitle: cliente.localidad.isNotEmpty ? cliente.localidad : cliente.domicilio,
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,

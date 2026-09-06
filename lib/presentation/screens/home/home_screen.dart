@@ -18,7 +18,7 @@ import '../orden_preparacion/ordenes_preparacion_screen.dart';
 import '../pedidos/nuevo_pedido_screen.dart';
 import '../pedidos/pedidos_screen.dart';
 import '../settings/settings_screen.dart';
-import '../stock/ajustes_stock_screen.dart';
+import '../stock/control_stock_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -244,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 color: Colors.brown.shade600,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const AjustesStockScreen()),
+                  MaterialPageRoute(builder: (_) => const ControlStockScreen()),
                 ),
               ),
             if (_apiMode && _permiteGenerarCompra)

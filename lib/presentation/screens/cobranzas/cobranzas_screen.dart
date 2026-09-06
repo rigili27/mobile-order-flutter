@@ -7,6 +7,7 @@ import '../../../data/models/cobranza.dart';
 import '../../../data/repositories/cliente_repository.dart';
 import '../../../data/repositories/cobranza_repository.dart';
 import '../../providers/api_sync_provider.dart';
+import '../../widgets/app_list_card.dart';
 import 'nueva_cobranza_screen.dart';
 
 /// Listado de las cobranzas registradas desde la app, con el estado de
@@ -103,19 +104,21 @@ class _CobranzasScreenState extends State<CobranzasScreen> {
                       Center(child: Text('Sin cobranzas registradas')),
                     ],
                   )
-                : ListView.separated(
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
                     itemCount: _cobranzas.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (_, i) {
                       final c = _cobranzas[i];
                       final estado =
                           c.id == null ? null : _estados[c.id!]?.estado;
                       final chip = _chip(estado);
-                      return ListTile(
-                        title: Text(_nombresCliente[c.codCliente] ??
-                            'Cliente ${c.codCliente}'),
-                        subtitle: Text(
-                            '${c.fecha} · ${c.formaPago.name} · \$ ${_fmt.format(c.importe)}'),
+                      return AppListCard(
+                        leadingIcon: Icons.payments_outlined,
+                        leadingColor: Colors.teal,
+                        title: _nombresCliente[c.codCliente] ??
+                            'Cliente ${c.codCliente}',
+                        subtitle:
+                            '${c.fecha} · ${c.formaPago.name} · \$ ${_fmt.format(c.importe)}',
                         trailing: Chip(
                           visualDensity: VisualDensity.compact,
                           avatar: Icon(chip.icon, size: 16, color: chip.color),

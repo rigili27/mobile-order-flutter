@@ -79,7 +79,7 @@ class SyncStateDatabaseHelper {
     final dir = await getApplicationDocumentsDirectory();
     return openDatabase(
       join(dir.path, 'movil_sync.db'),
-      version: 4,
+      version: 5,
       onCreate: (db, _) async {
         await db.execute(_kPedidoOutboxDDL);
         await db.execute(_kCobranzaLocalDDL);
@@ -90,6 +90,8 @@ class SyncStateDatabaseHelper {
         await db.execute(_kAjusteStockOutboxDDL);
         await db.execute(_kOrdenCompraLocalDDL);
         await db.execute(_kOrdenCompraOutboxDDL);
+        await db.execute(_kResourceSyncDDL);
+        await db.execute(_kControlStockLocalDDL);
       },
       onUpgrade: (db, oldVersion, _) async {
         if (oldVersion < 2) {
@@ -105,6 +107,10 @@ class SyncStateDatabaseHelper {
           await db.execute(_kAjusteStockOutboxDDL);
           await db.execute(_kOrdenCompraLocalDDL);
           await db.execute(_kOrdenCompraOutboxDDL);
+        }
+        if (oldVersion < 5) {
+          await db.execute(_kResourceSyncDDL);
+          await db.execute(_kControlStockLocalDDL);
         }
       },
     );
@@ -222,6 +228,94 @@ class SyncStateDatabaseHelper {
       updated_at TEXT NOT NULL
     )
   ''';
+
+  // "Última sincronización" por recurso consultado on-demand (cta cte de un
+  // cliente, catálogo de artículos, pedidos). `resource` es una clave libre
+  // — para cta cte por cliente se usa `cta_cte:<codCliente>`.
+  static const _kResourceSyncDDL = '''
+    CREATE TABLE resource_sync (
+      resource TEXT PRIMARY KEY,
+      last_sync TEXT NOT NULL
+    )
+  ''';
+
+  // Estado del control de stock (artículo × depósito): si el vendedor ya lo
+  // contó y qué cantidad anotó. Se limpia al enviar el control.
+  static const _kControlStockLocalDDL = '''
+    CREATE TABLE control_stock_local (
+      cod_articulo INTEGER NOT NULL,
+      cod_deposito INTEGER NOT NULL,
+      controlado INTEGER NOT NULL DEFAULT 0,
+      cantidad_contada REAL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (cod_articulo, cod_deposito)
+    )
+  ''';
+
+  // ── última sincronización por recurso ─────────────────────────────────────
+
+  Future<void> markResourceSynced(String resource, [DateTime? when]) async {
+    final db = await _database;
+    await db.insert(
+      'resource_sync',
+      {
+        'resource': resource,
+        'last_sync': (when ?? DateTime.now()).toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<DateTime?> resourceLastSync(String resource) async {
+    final db = await _database;
+    final rows = await db.query('resource_sync',
+        where: 'resource = ?', whereArgs: [resource], limit: 1);
+    if (rows.isEmpty) return null;
+    return DateTime.tryParse(rows.first['last_sync'] as String? ?? '');
+  }
+
+  // ── control de stock ──────────────────────────────────────────────────────
+
+  Future<void> setControlStock({
+    required int codArticulo,
+    required int codDeposito,
+    required bool controlado,
+    double? cantidadContada,
+  }) async {
+    final db = await _database;
+    await db.insert(
+      'control_stock_local',
+      {
+        'cod_articulo': codArticulo,
+        'cod_deposito': codDeposito,
+        'controlado': controlado ? 1 : 0,
+        'cantidad_contada': cantidadContada,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Map<int, Map<String, dynamic>>> controlStockPorArticulo(
+      int codDeposito) async {
+    final db = await _database;
+    final rows = await db.query('control_stock_local',
+        where: 'cod_deposito = ?', whereArgs: [codDeposito]);
+    return {for (final r in rows) r['cod_articulo'] as int: r};
+  }
+
+  Future<List<Map<String, dynamic>>> controlStockControlados(
+      int codDeposito) async {
+    final db = await _database;
+    return db.query('control_stock_local',
+        where: 'cod_deposito = ? AND controlado = 1', whereArgs: [codDeposito]);
+  }
+
+  Future<void> limpiarControlStock(int codDeposito) async {
+    final db = await _database;
+    await db.delete('control_stock_local',
+        where: 'cod_deposito = ?', whereArgs: [codDeposito]);
+  }
 
   // ── pedidos ────────────────────────────────────────────────────────────────
 

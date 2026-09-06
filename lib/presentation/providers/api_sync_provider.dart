@@ -13,6 +13,7 @@ import '../../data/models/pedido_cabecera.dart';
 import '../../data/repositories/articulo_repository.dart';
 import '../../data/repositories/cliente_repository.dart';
 import '../../data/repositories/cobranza_repository.dart';
+import '../../data/repositories/cuenta_corriente_repository.dart';
 import '../../data/repositories/parametros_repository.dart';
 import '../../data/repositories/pedido_repository.dart';
 
@@ -29,6 +30,7 @@ class ApiSyncProvider extends ChangeNotifier {
   final _cobranzaRepo = CobranzaRepository();
   final _clienteRepo = ClienteRepository();
   final _articuloRepo = ArticuloRepository();
+  final _ctaCteRepo = CuentaCorrienteRepository();
   final _outbox = SyncStateDatabaseHelper.instance;
 
   ApiSyncStatus _status = ApiSyncStatus.idle;
@@ -103,6 +105,58 @@ class ApiSyncProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Refresca el detalle de cuenta corriente de un cliente desde el ERP y lo
+  /// cachea localmente. Devuelve true si actualizó.
+  Future<bool> syncCuentaCorriente(int codCliente) async {
+    if (busy) return false;
+    if (!await ApiConfig.hasSession()) return false;
+    _status = ApiSyncStatus.syncing;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final data = await _api.fetchCuentaCorriente(codCliente);
+      await _ctaCteRepo.reemplazarDetalle(
+          codCliente, (data['movimientos'] as List?) ?? const []);
+      await _outbox.markResourceSynced('cta_cte:$codCliente');
+      _status = ApiSyncStatus.idle;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _fail(e.message);
+      return false;
+    } catch (e) {
+      _fail('Error al traer la cuenta corriente: $e');
+      return false;
+    }
+  }
+
+  /// Refresca artículos + listas de precio + stock por depósito desde el
+  /// endpoint dedicado.
+  Future<bool> syncArticulos() async {
+    if (busy) return false;
+    if (!await ApiConfig.hasSession()) return false;
+    _status = ApiSyncStatus.syncing;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final data = await _api.fetchArticulos();
+      await _importer.importArticulos(data);
+      await _outbox.markResourceSynced('articulos');
+      _status = ApiSyncStatus.idle;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _fail(e.message);
+      return false;
+    } catch (e) {
+      _fail('Error al traer los artículos: $e');
+      return false;
+    }
+  }
+
+  Future<DateTime?> resourceLastSync(String resource) =>
+      _outbox.resourceLastSync(resource);
 
   /// Sube un pedido local recién guardado (o lo reintenta).
   Future<bool> subirPedido(int idPedidoLocal) async {

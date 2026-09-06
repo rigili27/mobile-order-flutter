@@ -8,7 +8,11 @@ import '../../../data/models/deposito.dart';
 import '../../../data/repositories/articulo_repository.dart';
 import '../../../data/repositories/deposito_repository.dart';
 import '../../../data/repositories/parametros_repository.dart';
+import '../../providers/api_sync_provider.dart';
+import '../../widgets/sync_header.dart';
+import 'articulo_detalle_screen.dart';
 import 'nuevo_articulo_dialog.dart';
+import 'package:provider/provider.dart';
 
 class ArticulosScreen extends StatefulWidget {
   const ArticulosScreen({super.key});
@@ -32,6 +36,9 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
   bool _permiteVerPrecios = true;
   int _listaPrecios = 1;
   int? _depositoFiltro;
+  DateTime? _lastSync;
+  bool _syncing = false;
+  bool _depositoFijo = false;
 
   @override
   void initState() {
@@ -39,14 +46,34 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
     _loadDepositos();
     _load('');
     _searchCtrl.addListener(() => _load(_searchCtrl.text));
-    ApiConfig.isConfigured().then((v) {
-      if (mounted) setState(() => _apiMode = v);
+    final sync = context.read<ApiSyncProvider>();
+    ApiConfig.isConfigured().then((v) async {
+      if (!mounted) return;
+      setState(() => _apiMode = v);
+      if (v) {
+        final last = await sync.resourceLastSync('articulos');
+        if (!mounted) return;
+        setState(() => _lastSync = last);
+        if (last == null ||
+            DateTime.now().difference(last) > const Duration(minutes: 15)) {
+          _sync();
+        }
+      }
     });
     ParametrosRepository.permiteAltaArticulos().then((v) {
       if (mounted) setState(() => _permiteAltaArticulos = v);
     });
     ParametrosRepository.permiteVerPrecios().then((v) {
       if (mounted) setState(() => _permiteVerPrecios = v);
+    });
+    ParametrosRepository.depositoAsignado().then((v) {
+      if (v != null && mounted) {
+        setState(() {
+          _depositoFijo = true;
+          _depositoFiltro = v;
+        });
+        _load(_searchCtrl.text);
+      }
     });
   }
 
@@ -71,6 +98,17 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
         _stockPorArticulo = stockMap;
       });
     }
+  }
+
+  Future<void> _sync() async {
+    if (_syncing) return;
+    final sync = context.read<ApiSyncProvider>();
+    setState(() => _syncing = true);
+    await sync.syncArticulos();
+    final last = await sync.resourceLastSync('articulos');
+    await _loadDepositos();
+    await _load(_searchCtrl.text);
+    if (mounted) setState(() { _syncing = false; _lastSync = last; });
   }
 
   Future<void> _load(String query) async {
@@ -139,6 +177,13 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
       ),
       body: Column(
         children: [
+          if (_apiMode)
+            SyncHeader(
+              lastSync: _lastSync,
+              syncing: _syncing,
+              onSync: _sync,
+              label: 'Artículos',
+            ),
           // ── Filtros ────────────────────────────────────────────────────────
           Container(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -161,28 +206,30 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
                   onChanged: (v) => setState(() => _listaPrecios = v!),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<int?>(
-                  value: _depositoFiltro,
-                  decoration: const InputDecoration(
-                    labelText: 'Depósito',
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              if (!_depositoFijo) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<int?>(
+                    value: _depositoFiltro,
+                    decoration: const InputDecoration(
+                      labelText: 'Depósito',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Todos')),
+                      ..._depositosFiltro.map((d) => DropdownMenuItem(
+                          value: d.codigo, child: Text(d.descripcion))),
+                    ],
+                    onChanged: (v) {
+                      setState(() => _depositoFiltro = v);
+                      _load(_searchCtrl.text);
+                    },
                   ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Todos')),
-                    ..._depositosFiltro.map((d) => DropdownMenuItem(
-                        value: d.codigo, child: Text(d.descripcion))),
-                  ],
-                  onChanged: (v) {
-                    setState(() => _depositoFiltro = v);
-                    _load(_searchCtrl.text);
-                  },
                 ),
-              ),
+              ],
             ]),
           ),
 
@@ -222,6 +269,15 @@ class _ArticulosScreenState extends State<ArticulosScreen> {
                             listaPrecios: _listaPrecios,
                             depositos: _stockPorArticulo[art.codigo] ?? [],
                             mostrarPrecio: _permiteVerPrecios,
+                            onTap: _apiMode
+                                ? () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ArticuloDetalleScreen(
+                                            articulo: art),
+                                      ),
+                                    )
+                                : null,
                           );
                         },
                       ),
@@ -237,12 +293,14 @@ class _ArticuloTile extends StatelessWidget {
   final int listaPrecios;
   final List<Deposito> depositos;
   final bool mostrarPrecio;
+  final VoidCallback? onTap;
 
   const _ArticuloTile({
     required this.articulo,
     required this.listaPrecios,
     required this.depositos,
     this.mostrarPrecio = true,
+    this.onTap,
   });
 
   @override
@@ -256,7 +314,11 @@ class _ArticuloTile extends StatelessWidget {
             .map((d) => '${d.descripcion}: ${d.stock.toStringAsFixed(2)}')
             .join('  |  ');
 
-    return ListTile(
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+      onTap: onTap,
       leading: CircleAvatar(
         backgroundColor: Colors.green.shade100,
         child: const Icon(Icons.inventory_2, color: Colors.green),
@@ -311,6 +373,7 @@ class _ArticuloTile extends StatelessWidget {
         ],
       ),
       isThreeLine: true,
+      ),
     );
   }
 }

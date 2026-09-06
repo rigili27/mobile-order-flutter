@@ -14,8 +14,12 @@ import '../../../data/repositories/cliente_repository.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../../data/repositories/pedido_repository.dart';
 import '../../../data/repositories/vendedor_repository.dart';
+import '../../../core/api/api_config.dart';
+import '../../../core/database/sync_state_database_helper.dart';
+import '../../providers/api_sync_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/pedido_provider.dart';
+import '../../widgets/sync_header.dart';
 import 'nuevo_pedido_screen.dart';
 import 'pedido_detalle_screen.dart';
 
@@ -32,9 +36,13 @@ class _PedidosScreenState extends State<PedidosScreen> {
   final _paramRepo = ParametrosRepository();
   final _vendedorRepo = VendedorRepository();
   List<PedidoCabecera> _pedidos = [];
+  Map<int, OutboxEstado> _syncEstados = {};
   bool _loading = true;
   bool _generatingPdf = false;
   bool _sharingDb = false;
+  bool _apiMode = false;
+  bool _syncing = false;
+  DateTime? _lastSync;
   String _simbolo = '\$';
 
   @override
@@ -50,7 +58,37 @@ class _PedidosScreenState extends State<PedidosScreen> {
       _pedidos = await _pedidoRepo.getByVendedor(codVendedor);
     }
     final simbolo = await ParametrosRepository.simboloMoneda();
-    if (mounted) setState(() { _loading = false; _simbolo = simbolo; });
+    final apiMode = await ApiConfig.isConfigured();
+    final estados = <int, OutboxEstado>{};
+    if (apiMode) {
+      for (final p in _pedidos) {
+        if (p.id == null) continue;
+        final e = await SyncStateDatabaseHelper.instance.find(p.id!);
+        if (e != null) estados[p.id!] = e.estado;
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _loading = false;
+        _simbolo = simbolo;
+        _apiMode = apiMode;
+        _syncEstados = estados;
+      });
+    }
+  }
+
+  Future<void> _sync() async {
+    if (_syncing) return;
+    final sync = context.read<ApiSyncProvider>();
+    setState(() => _syncing = true);
+    await sync.reintentarPendientes();
+    await _load();
+    if (mounted) {
+      setState(() {
+        _syncing = false;
+        _lastSync = DateTime.now();
+      });
+    }
   }
 
   Future<void> _compartirDB() async {
@@ -157,7 +195,27 @@ class _PedidosScreenState extends State<PedidosScreen> {
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      body: _loading
+      body: Column(children: [
+        if (_apiMode)
+          SyncHeader(
+            lastSync: _lastSync,
+            syncing: _syncing,
+            onSync: _sync,
+            label: 'Pedidos',
+          ),
+        Expanded(
+          child: _buildLista(),
+        ),
+      ]),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _goNuevoPedido,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _buildLista() {
+    return _loading
           ? const Center(child: CircularProgressIndicator())
           : _pedidos.isEmpty
               ? Center(
@@ -184,6 +242,10 @@ class _PedidosScreenState extends State<PedidosScreen> {
                       pedido: _pedidos[i],
                       clienteRepo: _clienteRepo,
                       simbolo: _simbolo,
+                      syncEstado: _apiMode
+                          ? (_syncEstados[_pedidos[i].id] ??
+                              OutboxEstado.pendiente)
+                          : null,
                       onTap: () async {
                         await Navigator.push(
                           context,
@@ -205,12 +267,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
                       },
                     ),
                   ),
-                ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _goNuevoPedido,
-        child: const Icon(Icons.add),
-      ),
-    );
+                );
   }
 
   void _goNuevoPedido() {
@@ -228,18 +285,35 @@ class _PedidoTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final String simbolo;
+  final OutboxEstado? syncEstado;
 
   const _PedidoTile(
       {required this.pedido,
       required this.clienteRepo,
       required this.onTap,
       required this.onEdit,
-      required this.simbolo});
+      required this.simbolo,
+      this.syncEstado});
+
+  ({String label, Color color, IconData icon}) get _chip {
+    switch (syncEstado) {
+      case OutboxEstado.sincronizado:
+        return (label: 'Sincronizado', color: Colors.green, icon: Icons.cloud_done);
+      case OutboxEstado.error:
+        return (label: 'Error de sync', color: Colors.red, icon: Icons.cloud_off);
+      case OutboxEstado.pendiente:
+      case null:
+        return (label: 'Pendiente', color: Colors.orange, icon: Icons.cloud_upload);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00', 'es_AR');
-    return ListTile(
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
       leading: CircleAvatar(
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
         child: Text(
@@ -254,7 +328,16 @@ class _PedidoTile extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-      subtitle: Text(pedido.fecha),
+      subtitle: syncEstado == null
+          ? Text(pedido.fecha)
+          : Row(children: [
+              Text(pedido.fecha, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 8),
+              Icon(_chip.icon, size: 13, color: _chip.color),
+              const SizedBox(width: 3),
+              Text(_chip.label,
+                  style: TextStyle(fontSize: 11, color: _chip.color)),
+            ]),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -276,6 +359,7 @@ class _PedidoTile extends StatelessWidget {
         ],
       ),
       onTap: onTap,
+      ),
     );
   }
 }

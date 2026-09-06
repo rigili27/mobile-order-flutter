@@ -127,6 +127,36 @@ class PreventaApi {
     return body;
   }
 
+  /// Detalle de cuenta corriente de un cliente: `{saldo, movimientos: [...]}`.
+  Future<Map<String, dynamic>> fetchCuentaCorriente(int codCliente) async {
+    final res = await _client
+        .get(await _uri('clientes/$codCliente/cuenta-corriente'),
+            headers: await _headers())
+        .timeout(_timeout);
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(
+          _errorMessage(body, 'No se pudo traer la cuenta corriente.'),
+          statusCode: res.statusCode);
+    }
+    return body;
+  }
+
+  /// Detalle completo de artículos con TODAS las listas de precio:
+  /// `{listas: [...], articulos: [...]}`.
+  Future<Map<String, dynamic>> fetchArticulos() async {
+    final res = await _client
+        .get(await _uri('articulos'), headers: await _headers())
+        .timeout(_timeout);
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(
+          _errorMessage(body, 'No se pudieron traer los artículos.'),
+          statusCode: res.statusCode);
+    }
+    return body;
+  }
+
   /// Sube un pedido. Devuelve el id del comprobante creado en el ERP.
   Future<int?> pushPedido(Map<String, dynamic> payload) async {
     final res = await _client

@@ -50,6 +50,14 @@ class Parametros {
   bool get permiteStock => _config['permite_stock'] == 'true';
   bool get permiteGenerarCompra => _config['permite_generar_compra'] == 'true';
 
+  /// Depósito asignado al vendedor (modo API). `null` = sin depósito fijo: la
+  /// app elige y ve el stock del central.
+  int? get depositoAsignado => int.tryParse(_config['deposito_asignado'] ?? '');
+
+  /// `false` = no se puede cargar un renglón sin stock suficiente en el
+  /// depósito asignado (la app lo bloquea y el ERP lo rechaza).
+  bool get permiteStockNegativo => _config['permite_stock_negativo'] != 'false';
+
   factory Parametros.fromMap(Map<String, dynamic> map) => Parametros(
         razonSocial: (map['RAZONSOCIAL'] as String? ?? '').trim(),
         domicilio: (map['DOMICILIO'] as String? ?? '').trim(),

@@ -20,6 +20,7 @@ import '../../providers/ftp_provider.dart';
 import '../../providers/update_provider.dart';
 import '../../widgets/update_dialog.dart';
 import '../login/login_screen.dart';
+import '../login/qr_pairing_screen.dart';
 import 'api_server_card.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -517,6 +518,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const QrPairingScreen()),
+                );
+              },
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Escanear QR de acceso'),
+              style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 44)),
             ),
             if (!_apiMode) ...[
               const SizedBox(height: 16),

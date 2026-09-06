@@ -71,6 +71,17 @@ class ParametrosRepository {
     return _cache!.permiteGenerarCompra;
   }
 
+  /// Depósito asignado al vendedor (modo API) o null si elige libremente.
+  static Future<int?> depositoAsignado() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.depositoAsignado;
+  }
+
+  static Future<bool> permiteStockNegativo() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.permiteStockNegativo;
+  }
+
   static void invalidateCache() => _cache = null;
 
   Future<Parametros> get() async {

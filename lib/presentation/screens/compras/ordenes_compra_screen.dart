@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/api_sync_provider.dart';
+import '../../widgets/app_list_card.dart';
 import 'nueva_orden_compra_screen.dart';
 
 /// Listado de las propuestas de orden de compra que este dispositivo mandó.
@@ -47,18 +48,20 @@ class _OrdenesCompraScreenState extends State<OrdenesCompraScreen> {
                         Center(child: Text('Sin órdenes de compra registradas')),
                       ],
                     )
-                  : ListView.separated(
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
                       itemCount: _ordenes.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, i) {
                         final o = _ordenes[i];
                         final items = (jsonDecode(o['items_json'] as String) as List)
                             .cast<Map<String, dynamic>>();
-                        return ListTile(
-                          title: Text((o['proveedor_nombre'] as String?)?.isNotEmpty == true
+                        return AppListCard(
+                          leadingIcon: Icons.shopping_cart_outlined,
+                          leadingColor: Colors.indigo,
+                          title: (o['proveedor_nombre'] as String?)?.isNotEmpty == true
                               ? o['proveedor_nombre'] as String
-                              : 'Sin proveedor'),
-                          subtitle: Text('${items.length} artículo(s)'),
+                              : 'Sin proveedor',
+                          subtitle: '${items.length} artículo(s)',
                           trailing: const Chip(
                             visualDensity: VisualDensity.compact,
                             label: Text('Pendiente', style: TextStyle(fontSize: 11)),
