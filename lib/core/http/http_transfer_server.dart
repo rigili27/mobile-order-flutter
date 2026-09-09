@@ -169,16 +169,16 @@ String _buildHtml(String pcPath, String vendorName, String appVersion, bool orde
 <style>
   *{box-sizing:border-box}
   body{font-family:sans-serif;max-width:540px;margin:48px auto;padding:16px;color:#333}
-  h1{color:#1565C0;margin-bottom:8px}
-  .vendor-badge{background:#e3f2fd;color:#0d47a1;border:1px solid #90caf9;
+  h1{color:#121214;margin-bottom:8px}
+  .vendor-badge{background:#f4f2ff;color:#5b3ff0;border:1px solid #d6ccff;
                 border-radius:8px;padding:10px 14px;margin-bottom:24px;
                 font-size:.95rem;font-weight:600}
   .card{border:1px solid #ddd;border-radius:10px;padding:20px;margin-bottom:20px}
   h2{margin:0 0 12px;font-size:1rem;color:#555}
-  .btn{display:block;width:100%;padding:12px;background:#1565C0;color:#fff;
+  .btn{display:block;width:100%;padding:12px;background:#7c5cfc;color:#fff;
        border:none;border-radius:6px;font-size:1rem;cursor:pointer;
        text-align:center;text-decoration:none}
-  .btn:hover{background:#0d47a1}
+  .btn:hover{background:#6a45f9}
   .btn-green{background:#2e7d32}.btn-green:hover{background:#1b5e20}
   .btn-amber{background:#e65100}.btn-amber:hover{background:#bf360c}
   input[type=file]{display:block;width:100%;padding:8px;margin-bottom:12px;
@@ -186,7 +186,7 @@ String _buildHtml(String pcPath, String vendorName, String appVersion, bool orde
   #msg{margin-top:12px;padding:10px;border-radius:6px;display:none;font-size:.9rem}
   .ok{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
   .err{background:#ffebee;color:#c62828;border:1px solid #ef9a9a}
-  .loading{background:#e3f2fd;color:#1565C0;border:1px solid #90caf9}
+  .loading{background:#f4f2ff;color:#5b3ff0;border:1px solid #d6ccff}
   /* modal */
   #overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
             align-items:center;justify-content:center;z-index:100}

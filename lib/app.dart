@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/database/database_helper.dart';
+import 'core/theme/brand_colors.dart';
 import 'core/database/orden_preparacion_database_helper.dart';
 import 'presentation/providers/api_sync_provider.dart';
 import 'presentation/providers/auth_provider.dart';
@@ -38,12 +39,12 @@ class TomaPedidosApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF1565C0),
+            seedColor: kLabgeVioleta,
             brightness: Brightness.light,
           ),
           useMaterial3: true,
           appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF1565C0),
+            backgroundColor: kLabgeNegro,
             foregroundColor: Colors.white,
             elevation: 2,
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../../../core/api/api_config.dart';
+import '../../../core/theme/brand_colors.dart';
 import '../../../data/models/vendedor.dart';
 import '../../../data/repositories/vendedor_repository.dart';
 import '../../providers/api_sync_provider.dart';
@@ -111,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.watch<AuthProvider>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1565C0),
+      backgroundColor: kLabgeNegro,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -128,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.receipt_long,
-                          size: 64, color: Color(0xFF1565C0)),
+                          size: 64, color: kLabgeVioleta),
                       const SizedBox(height: 8),
                       Text(
                         'Toma Pedidos',
@@ -137,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             .headlineSmall
                             ?.copyWith(
                                 fontWeight: FontWeight.bold,
-                                color: const Color(0xFF1565C0)),
+                                color: kLabgeVioleta),
                       ),
                       const SizedBox(height: 32),
 
