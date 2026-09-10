@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'core/api/api_config.dart';
 import 'core/database/database_helper.dart';
 import 'core/theme/brand_colors.dart';
 import 'core/database/orden_preparacion_database_helper.dart';
@@ -8,9 +9,11 @@ import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/ftp_provider.dart';
 import 'presentation/providers/orden_preparacion_provider.dart';
 import 'presentation/providers/pedido_provider.dart';
+import 'presentation/providers/reparto_provider.dart';
 import 'presentation/providers/update_provider.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/login/login_screen.dart';
+import 'presentation/screens/reparto/reparto_home_screen.dart';
 import 'presentation/screens/settings/settings_screen.dart';
 
 /// Navigator raíz de la app. Se usa para forzar la navegación a Login desde
@@ -31,6 +34,7 @@ class TomaPedidosApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => OrdenPreparacionProvider()),
         ChangeNotifierProvider(create: (_) => FtpProvider()),
         ChangeNotifierProvider(create: (_) => ApiSyncProvider()),
+        ChangeNotifierProvider(create: (_) => RepartoProvider()),
         ChangeNotifierProvider(create: (_) => UpdateProvider()),
       ],
       child: MaterialApp(
@@ -73,6 +77,7 @@ class _AppRootState extends State<_AppRoot> {
   bool _checking = true;
   DbInitState _dbState = DbInitState.ok;
   String? _dbError;
+  bool _esRepartidor = false;
 
   // Listener directo al ChangeNotifier: más confiable que context.watch dentro
   // de un switch case, donde la suscripción puede no re-registrarse correctamente.
@@ -111,8 +116,12 @@ class _AppRootState extends State<_AppRoot> {
     // The orden DB auto-creates its tables; init always succeeds.
     await OrdenPreparacionDatabaseHelper.instance.init();
 
-    if (result.state == DbInitState.ok) {
-      await context.read<AuthProvider>().restoreSession();
+    // El repartidor no tiene base de catálogo (moviles_api.db): su sesión no
+    // depende de DbInitState. Se restaura siempre y se rutea a su propio Home.
+    _esRepartidor = await ApiConfig.isRepartidor();
+
+    if (result.state == DbInitState.ok || _esRepartidor) {
+      if (mounted) await context.read<AuthProvider>().restoreSession();
     }
     if (mounted) setState(() => _checking = false);
   }
@@ -121,6 +130,13 @@ class _AppRootState extends State<_AppRoot> {
   Widget build(BuildContext context) {
     if (_checking) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final auth = context.read<AuthProvider>();
+
+    // Modo repartidor: su Home no necesita moviles_api.db.
+    if (auth.esRepartidor) {
+      return auth.isAuthenticated ? const RepartoHomeScreen() : const LoginScreen();
     }
 
     switch (_dbState) {

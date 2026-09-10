@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/api/api_config.dart';
 import '../../core/api/preventa_api.dart';
+import '../../core/api/reparto_api.dart';
 import '../../data/models/vendedor.dart';
 import '../../data/repositories/vendedor_repository.dart';
 
@@ -11,8 +12,10 @@ enum AuthState { initial, loading, authenticated, unauthenticated }
 class AuthProvider extends ChangeNotifier {
   final _repo = VendedorRepository();
   final _api = PreventaApi();
+  final _repartoApi = RepartoApi();
 
   static const _keyCodigoVendedor = 'vendedor_codigo';
+  static const _keyNombre = 'vendedor_nombre';
   static const _adminCodigo = -1;
   static const _adminPassword = 'password';
   static final _adminVendedor =
@@ -21,12 +24,16 @@ class AuthProvider extends ChangeNotifier {
   Vendedor? _vendedor;
   AuthState _state = AuthState.initial;
   String? _errorMessage;
+  bool _esRepartidor = false;
 
   Vendedor? get vendedor => _vendedor;
   AuthState get state => _state;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _state == AuthState.authenticated;
   bool get isAdmin => _vendedor?.codigo == _adminCodigo;
+
+  /// La sesión API se abrió en modo repartidor (QR o login de Reparto).
+  bool get esRepartidor => _esRepartidor;
 
   static Vendedor get adminVendedor => _adminVendedor;
   static int get adminCodigo => _adminCodigo;
@@ -36,12 +43,20 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     final codigo = prefs.getInt(_keyCodigoVendedor);
+    _esRepartidor = await ApiConfig.isRepartidor();
     if (codigo == null) {
       _state = AuthState.unauthenticated;
       notifyListeners();
       return;
     }
-    if (codigo == _adminCodigo) {
+    if (_esRepartidor) {
+      // El repartidor no tiene fila en VendMovil ni base de catálogo.
+      _vendedor = Vendedor(
+        codigo: codigo,
+        nombre: prefs.getString(_keyNombre) ?? 'Repartidor',
+        clave: '',
+      );
+    } else if (codigo == _adminCodigo) {
       _vendedor = _adminVendedor;
     } else {
       _vendedor = await _repo.findByCodigo(codigo);
@@ -168,22 +183,102 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Login de repartidor por usuario/clave contra la API de Reparto. El
+  /// servidor + tenant ya tienen que estar configurados (modo API).
+  Future<bool> loginRepartoConApi(String usuario, String password) async {
+    _state = AuthState.loading;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final res = await _repartoApi.login(
+        usuario: usuario.trim(),
+        password: password,
+        deviceName: '${info.appName} ${info.version}',
+      );
+      await ApiConfig.setRole('repartidor');
+      final r = res['repartidor'] as Map<String, dynamic>;
+      final codigo = r['codigo'] as int;
+      _vendedor = Vendedor(codigo: codigo, nombre: (r['nombre'] as String?) ?? 'Repartidor', clave: '');
+      _esRepartidor = true;
+      _state = AuthState.authenticated;
+      await _persistSession(codigo, nombre: _vendedor!.nombre);
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('No se pudo iniciar sesión: $e');
+      return false;
+    }
+  }
+
+  /// Adopta una sesión de repartidor a partir del QR del ERP (Reparto →
+  /// Repartidores). Persiste servidor + tenant + token + rol y deja al
+  /// repartidor autenticado. No sincroniza catálogo (no hay).
+  Future<bool> adoptarSesionRepartoQr({
+    required String baseUrl,
+    required String tenant,
+    required String code,
+  }) async {
+    _state = AuthState.loading;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final res = await _repartoApi.pairWithCode(
+        baseUrl: baseUrl,
+        tenant: tenant,
+        code: code,
+        deviceName: '${info.appName} ${info.version}',
+      );
+
+      await ApiConfig.setServer(baseUrl, tenant);
+      await ApiConfig.setToken(res['token'] as String);
+      await ApiConfig.setRole('repartidor');
+
+      final r = res['repartidor'] as Map<String, dynamic>;
+      final codigo = r['codigo'] as int;
+      _vendedor = Vendedor(codigo: codigo, nombre: (r['nombre'] as String?) ?? 'Repartidor', clave: '');
+      _esRepartidor = true;
+      _state = AuthState.authenticated;
+      await _persistSession(codigo, nombre: _vendedor!.nombre);
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('No se pudo vincular el dispositivo: $e');
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     // Actualizar estado primero → UI reacciona de inmediato.
     _vendedor = null;
     _state = AuthState.unauthenticated;
+    _esRepartidor = false;
     notifyListeners();
     // Limpiar sesión persistida en background (no bloquea la navegación).
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyCodigoVendedor);
+    await prefs.remove(_keyNombre);
     if (await ApiConfig.isConfigured()) {
-      await _api.logout();
+      if (await ApiConfig.isRepartidor()) {
+        await _repartoApi.logout();
+      } else {
+        await _api.logout();
+      }
     }
+    await ApiConfig.setRole(null);
   }
 
-  Future<void> _persistSession(int codigo) async {
+  Future<void> _persistSession(int codigo, {String? nombre}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyCodigoVendedor, codigo);
+    if (nombre != null) await prefs.setString(_keyNombre, nombre);
   }
 
   void _setError(String msg) {

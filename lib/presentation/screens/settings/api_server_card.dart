@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/api/api_config.dart';
 import '../../providers/api_sync_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/reparto_provider.dart';
 
 /// Card de "Servidor (API)" para la pantalla de Configuración. Convive con la
 /// card de Transferencia WiFi; si no se configura nada, la app sigue en modo
@@ -28,6 +29,8 @@ class _ApiServerCardState extends State<ApiServerCard> {
   bool _hasSession = false;
   bool _obscurePass = true;
   bool _loading = true;
+  bool _isRepartidor = false;
+  bool _syncReparto = false;
 
   @override
   void initState() {
@@ -48,9 +51,12 @@ class _ApiServerCardState extends State<ApiServerCard> {
     _baseUrlCtrl.text = await ApiConfig.baseUrl() ?? '';
     _tenantCtrl.text = await ApiConfig.tenant() ?? '';
     _hasSession = await ApiConfig.hasSession();
+    _isRepartidor = await ApiConfig.isRepartidor();
     if (mounted) {
       setState(() => _loading = false);
-      await context.read<ApiSyncProvider>().refreshState();
+      if (!_isRepartidor) {
+        await context.read<ApiSyncProvider>().refreshState();
+      }
     }
   }
 
@@ -126,11 +132,13 @@ class _ApiServerCardState extends State<ApiServerCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Sincroniza clientes, artículos y precios directamente con '
-              'GestionERP, y sube los pedidos al servidor. Alternativa a la '
-              'transferencia por WiFi.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            Text(
+              _isRepartidor
+                  ? 'Modo repartidor: descargá tus hojas de ruta y confirmá las entregas.'
+                  : 'Sincroniza clientes, artículos y precios directamente con '
+                      'GestionERP, y sube los pedidos al servidor. Alternativa a la '
+                      'transferencia por WiFi.',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
@@ -161,7 +169,14 @@ class _ApiServerCardState extends State<ApiServerCard> {
                 ),
               ),
               const SizedBox(height: 12),
-              if (!_hasSession) ...[
+              if (!_hasSession && _isRepartidor)
+                const Text(
+                  'La sesión de repartidor se abre escaneando el QR o desde el '
+                  'login con la opción "Ingresar como repartidor".',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                )
+              else if (!_hasSession) ...[
                 TextField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
@@ -209,64 +224,86 @@ class _ApiServerCardState extends State<ApiServerCard> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                ElevatedButton.icon(
-                  onPressed: sync.busy ? null : _sincronizar,
-                  icon: sync.status == ApiSyncStatus.syncing
-                      ? const SizedBox(
-                          width: 18, height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.sync),
-                  label: Text(sync.status == ApiSyncStatus.syncing
-                      ? 'Sincronizando…'
-                      : 'Sincronizar catálogo ahora'),
-                ),
-                if (sync.pendientes > 0) ...[
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: sync.busy
+                if (_isRepartidor)
+                  ElevatedButton.icon(
+                    onPressed: _syncReparto
                         ? null
                         : () async {
-                            await context
-                                .read<ApiSyncProvider>()
-                                .reintentarPendientes();
+                            setState(() => _syncReparto = true);
+                            final ok = await context.read<RepartoProvider>().sincronizar();
+                            if (mounted) {
+                              setState(() => _syncReparto = false);
+                              _snack(ok ? 'Hojas de ruta actualizadas.' : 'No se pudo sincronizar.',
+                                  error: !ok);
+                            }
                           },
-                    icon: const Icon(Icons.upload_file),
-                    label: Text('Reintentar envíos pendientes (${sync.pendientes})'),
+                    icon: _syncReparto
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.sync),
+                    label: Text(_syncReparto ? 'Sincronizando…' : 'Sincronizar hojas de ruta ahora'),
+                  )
+                else ...[
+                  ElevatedButton.icon(
+                    onPressed: sync.busy ? null : _sincronizar,
+                    icon: sync.status == ApiSyncStatus.syncing
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.sync),
+                    label: Text(sync.status == ApiSyncStatus.syncing
+                        ? 'Sincronizando…'
+                        : 'Sincronizar catálogo ahora'),
                   ),
-                ],
-                if (sync.advertencias.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      border: Border.all(color: Colors.amber.shade300),
-                      borderRadius: BorderRadius.circular(8),
+                  if (sync.pendientes > 0) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: sync.busy
+                          ? null
+                          : () async {
+                              await context
+                                  .read<ApiSyncProvider>()
+                                  .reintentarPendientes();
+                            },
+                      icon: const Icon(Icons.upload_file),
+                      label: Text('Reintentar envíos pendientes (${sync.pendientes})'),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Icon(Icons.warning_amber_rounded,
-                              size: 16, color: Colors.amber.shade800),
-                          const SizedBox(width: 6),
-                          Text('Avisos de la última sincronización',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.amber.shade900)),
-                        ]),
-                        const SizedBox(height: 4),
-                        for (final a in sync.advertencias)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text('• $a',
-                                style: const TextStyle(fontSize: 11)),
-                          ),
-                      ],
+                  ],
+                  if (sync.advertencias.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        border: Border.all(color: Colors.amber.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Icon(Icons.warning_amber_rounded,
+                                size: 16, color: Colors.amber.shade800),
+                            const SizedBox(width: 6),
+                            Text('Avisos de la última sincronización',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.amber.shade900)),
+                          ]),
+                          const SizedBox(height: 4),
+                          for (final a in sync.advertencias)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text('• $a',
+                                  style: const TextStyle(fontSize: 11)),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
                 const SizedBox(height: 8),
                 TextButton.icon(

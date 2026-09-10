@@ -8,6 +8,7 @@ import '../../../data/repositories/vendedor_repository.dart';
 import '../../providers/api_sync_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../home/home_screen.dart';
+import '../reparto/reparto_home_screen.dart';
 import 'qr_pairing_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -30,6 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String _version = '';
   bool _apiMode = false;
   bool _submitting = false;
+  bool _comoRepartidor = false;
 
   @override
   void initState() {
@@ -68,6 +70,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _submitting = true);
     try {
+      if (_apiMode && _comoRepartidor) {
+        final ok = await context
+            .read<AuthProvider>()
+            .loginRepartoConApi(_emailCtrl.text, _claveCtrl.text);
+        if (!ok || !mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RepartoHomeScreen()),
+        );
+        return;
+      }
       if (_apiMode) {
         final ok = await context
             .read<AuthProvider>()
@@ -219,6 +232,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         textInputAction: TextInputAction.done,
                         onFieldSubmitted: (_) => _login(),
                       ),
+
+                      if (_apiMode)
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text('Ingresar como repartidor'),
+                          value: _comoRepartidor,
+                          onChanged: (v) =>
+                              setState(() => _comoRepartidor = v ?? false),
+                        ),
 
                       if (auth.errorMessage != null) ...[
                         const SizedBox(height: 12),

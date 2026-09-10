@@ -13,6 +13,23 @@ class ApiConfig {
   static const _kTenant = 'api_tenant';
   static const _kToken = 'api_token';
   static const _kLastSync = 'api_last_sync';
+  // 'repartidor' cuando la sesión API se abrió en modo repartidor (QR o login
+  // de Reparto). Ausente = modo preventa normal.
+  static const _kRole = 'api_role';
+
+  static Future<String?> role() async =>
+      (await SharedPreferences.getInstance()).getString(_kRole);
+
+  static Future<bool> isRepartidor() async => (await role()) == 'repartidor';
+
+  static Future<void> setRole(String? role) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (role == null || role.isEmpty) {
+      await prefs.remove(_kRole);
+    } else {
+      await prefs.setString(_kRole, role);
+    }
+  }
 
   static Future<String?> baseUrl() async =>
       (await SharedPreferences.getInstance()).getString(_kBaseUrl);
@@ -63,7 +80,7 @@ class ApiConfig {
 
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
-    for (final k in [_kBaseUrl, _kTenant, _kToken, _kLastSync]) {
+    for (final k in [_kBaseUrl, _kTenant, _kToken, _kLastSync, _kRole]) {
       await prefs.remove(k);
     }
     await _aplicarCambioDeModo();

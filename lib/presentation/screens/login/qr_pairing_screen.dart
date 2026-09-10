@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../providers/api_sync_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../home/home_screen.dart';
+import '../reparto/reparto_home_screen.dart';
 
 /// Escaneo del QR de acceso generado por el ERP (Preventa → Vendedores).
 /// Deja la sesión del vendedor abierta sin pedir usuario ni contraseña.
@@ -80,7 +81,11 @@ class _QrPairingScreenState extends State<QrPairingScreen> {
     });
 
     final auth = context.read<AuthProvider>();
-    final ok = await auth.adoptarSesionQr(baseUrl: url, tenant: tenant, code: code);
+    final esReparto = data['modo'] == 'reparto';
+
+    final ok = esReparto
+        ? await auth.adoptarSesionRepartoQr(baseUrl: url, tenant: tenant, code: code)
+        : await auth.adoptarSesionQr(baseUrl: url, tenant: tenant, code: code);
     if (!mounted) return;
 
     if (!ok) {
@@ -88,6 +93,16 @@ class _QrPairingScreenState extends State<QrPairingScreen> {
         _procesando = false;
         _error = auth.errorMessage ?? 'No se pudo vincular el dispositivo.';
       });
+      return;
+    }
+
+    // El repartidor no tiene catálogo que sincronizar: directo a su Home.
+    if (esReparto) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const RepartoHomeScreen()),
+        (_) => false,
+      );
       return;
     }
 
