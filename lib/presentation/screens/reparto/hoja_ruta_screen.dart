@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../data/models/reparto_models.dart';
 import '../../providers/reparto_provider.dart';
+import '../../widgets/app_list_card.dart';
 import 'hoja_ruta_mapa_screen.dart';
 import 'parada_screen.dart';
 
@@ -67,20 +68,15 @@ class HojaRutaScreen extends StatelessWidget {
               ),
             ),
             for (final p in hoja.paradas)
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: p.resuelta ? Colors.green : Colors.blueGrey,
-                  child: Text('${p.orden}', style: const TextStyle(color: Colors.white)),
-                ),
-                title: Text(p.cliente),
-                subtitle: Text(
-                  [
-                    if (p.direccion != null && p.direccion!.isNotEmpty) p.direccion,
-                    if (p.ventanaDesde != null)
-                      'Ventana ${_hm(p.ventanaDesde!)}–${p.ventanaHasta != null ? _hm(p.ventanaHasta!) : ''}',
-                  ].whereType<String>().join('\n'),
-                ),
-                isThreeLine: true,
+              AppListCard(
+                leadingText: '${p.orden}',
+                leadingColor: p.resuelta ? Colors.green : Colors.blueGrey,
+                title: p.cliente,
+                subtitle: [
+                  if (p.direccion != null && p.direccion!.isNotEmpty) p.direccion,
+                  if (p.ventanaDesde != null)
+                    'Ventana ${_hm(p.ventanaDesde!)}–${p.ventanaHasta != null ? _hm(p.ventanaHasta!) : ''}',
+                ].whereType<String>().join(' · '),
                 trailing: Text(Parada.estadoLabel(p.estado),
                     style: TextStyle(
                         fontSize: 12,

@@ -68,12 +68,14 @@ class ParadaScreen extends StatelessWidget {
           const Divider(height: 32),
           const Text('Artículos', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...p.renglones.map((r) => ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(r.articulo),
-                subtitle: r.sku != null ? Text(r.sku!) : null,
-                trailing: Text(_n(r.cantidad)),
+          ...p.renglones.map((r) => Card(
+                margin: const EdgeInsets.symmetric(vertical: 3),
+                child: ListTile(
+                  dense: true,
+                  title: Text(r.articulo),
+                  subtitle: r.sku != null ? Text(r.sku!) : null,
+                  trailing: Text(_n(r.cantidad)),
+                ),
               )),
           const SizedBox(height: 12),
           Chip(label: Text('Estado: ${Parada.estadoLabel(p.estado)}')),

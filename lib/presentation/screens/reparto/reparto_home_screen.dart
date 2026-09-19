@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/reparto_provider.dart';
+import '../../widgets/app_list_card.dart';
 import '../login/login_screen.dart';
 import '../settings/settings_screen.dart';
 import 'hoja_ruta_screen.dart';
@@ -139,21 +140,19 @@ class _RepartoHomeScreenState extends State<RepartoHomeScreen>
                       itemCount: prov.hojas.length,
                       itemBuilder: (_, i) {
                         final h = prov.hojas[i];
-                        return Card(
-                          child: ListTile(
-                            title: Text('Hoja Nº ${h.id} · ${h.fecha}'),
-                            subtitle: Text(
-                                '${h.resueltas}/${h.total} paradas · ${h.deposito ?? ''}'),
-                            trailing: Chip(
-                              label: Text(HojaRutaEstadoChip.label(h.estado)),
-                              backgroundColor: h.enCurso
-                                  ? Colors.blue.shade100
-                                  : Colors.grey.shade200,
-                            ),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => HojaRutaScreen(hojaId: h.id)),
-                            ),
+                        return AppListCard(
+                          leadingIcon: Icons.route_outlined,
+                          title: 'Hoja Nº ${h.id} · ${h.fecha}',
+                          subtitle: '${h.resueltas}/${h.total} paradas · ${h.deposito ?? ''}',
+                          trailing: Chip(
+                            label: Text(HojaRutaEstadoChip.label(h.estado)),
+                            backgroundColor: h.enCurso
+                                ? Colors.blue.shade100
+                                : Colors.grey.shade200,
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => HojaRutaScreen(hojaId: h.id)),
                           ),
                         );
                       },
