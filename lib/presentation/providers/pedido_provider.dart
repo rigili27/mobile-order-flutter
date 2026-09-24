@@ -25,7 +25,13 @@ class ItemPedido {
     this.deposito,
   });
 
-  double get importe => PedidoDetalle.calcularImporte(cantidad, precio, porDto);
+  double get importe => PedidoDetalle.calcularImporte(
+        cantidad,
+        precio,
+        porDto,
+        alicuota: articulo.alicuota,
+        preciosIncluyenIva: ParametrosRepository.preciosIncluyenIvaCached,
+      );
 }
 
 class PedidoProvider extends ChangeNotifier {

@@ -7,6 +7,14 @@ class Parametros {
   final List<int>? logo;
   final String? configuracion;
 
+  /// Si los precios del catálogo (PREVTAPUB1..3 y ArtMovilPrecio) ya traen
+  /// el IVA adentro — ver `MovilCatalogService::parametros()` en el ERP y
+  /// docs/precios-neto-final.md ahí. En `true`, el total del pedido NO debe
+  /// sumar `alicuota` (ya está adentro del precio); en `false`, sí, como
+  /// siempre. El servidor recalcula igual al recibir el pedido: esto es
+  /// solo para que el total que ve el vendedor en la app coincida.
+  final bool preciosIncluyenIva;
+
   const Parametros({
     required this.razonSocial,
     required this.domicilio,
@@ -15,6 +23,7 @@ class Parametros {
     required this.ftp,
     this.logo,
     this.configuracion,
+    this.preciosIncluyenIva = false,
   });
 
   Map<String, String> get _config {
@@ -69,6 +78,7 @@ class Parametros {
             .where((e) => e.key.toUpperCase() == 'CONFIGURACION')
             .map((e) => e.value as String?)
             .firstOrNull,
+        preciosIncluyenIva: (map['PRECIOS_INCLUYEN_IVA'] as num? ?? 0) != 0,
       );
 
   static const empty = Parametros(

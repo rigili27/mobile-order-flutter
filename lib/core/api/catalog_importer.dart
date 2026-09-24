@@ -153,6 +153,9 @@ class CatalogImporter {
     if (!await hasColumn('ParaMovil', 'CONFIGURACION')) {
       await db.execute('ALTER TABLE ParaMovil ADD COLUMN CONFIGURACION TEXT');
     }
+    if (!await hasColumn('ParaMovil', 'PRECIOS_INCLUYEN_IVA')) {
+      await db.execute('ALTER TABLE ParaMovil ADD COLUMN PRECIOS_INCLUYEN_IVA INTEGER DEFAULT 0');
+    }
     if (!await hasColumn('PedCMovil', 'TIPOVENTA')) {
       await db.execute('ALTER TABLE PedCMovil ADD COLUMN TIPOVENTA TEXT');
     }
@@ -301,6 +304,7 @@ class CatalogImporter {
         'COTIZACION': _toDouble(p['cotizacion'], fallback: 1),
         'FTP': p['ftp'] ?? '',
         'CONFIGURACION': p['configuracion'] ?? '',
+        'PRECIOS_INCLUYEN_IVA': p['preciosIncluyenIva'] == true ? 1 : 0,
       };
 
   double _toDouble(Object? v, {double fallback = 0}) {

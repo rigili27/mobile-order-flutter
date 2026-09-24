@@ -57,8 +57,31 @@ class PedidoDetalle {
         'DEPOSITO': deposito,
       };
 
-  static double calcularImporte(double cantidad, double precio, double porDto) =>
-      cantidad * precio * (1 - porDto / 100);
+  /// Misma fórmula que `Modules\Facturacion\Support\LinePricing::compute()`
+  /// del ERP: con precios finales (`preciosIncluyenIva`) el total es el
+  /// bruto tal cual, la alícuota ya está adentro; con precios netos se
+  /// redondean neto e IVA por separado y el total es la suma de los dos ya
+  /// redondeados. El servidor recalcula igual al recibir el pedido — esto
+  /// es solo para que el total mostrado en la app ya coincida.
+  static double calcularImporte(
+    double cantidad,
+    double precio,
+    double porDto, {
+    double alicuota = 0,
+    bool preciosIncluyenIva = false,
+  }) {
+    final gross = cantidad * precio * (1 - porDto / 100);
+
+    if (preciosIncluyenIva) {
+      return _round2(gross);
+    }
+
+    final subtotal = _round2(gross);
+    final vatAmount = _round2(gross * alicuota / 100);
+    return _round2(subtotal + vatAmount);
+  }
+
+  static double _round2(double v) => (v * 100).round() / 100;
 
   PedidoDetalle copyWith({
     double? cantidad,

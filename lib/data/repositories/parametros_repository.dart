@@ -82,6 +82,19 @@ class ParametrosRepository {
     return _cache!.permiteStockNegativo;
   }
 
+  static Future<bool> preciosIncluyenIva() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.preciosIncluyenIva;
+  }
+
+  /// Lectura sincrónica del cache ya cargado — la necesita
+  /// `ItemPedido.importe` (getter sin await, recalculado en cada build() del
+  /// carrito). Home precarga el cache al loguear (ver home_screen), así que
+  /// para cuando se arma un pedido ya está disponible; si por algún motivo
+  /// no lo está, asume que no incluyen IVA (agrega la alícuota), que es el
+  /// comportamiento de siempre.
+  static bool get preciosIncluyenIvaCached => _cache?.preciosIncluyenIva ?? false;
+
   static void invalidateCache() => _cache = null;
 
   Future<Parametros> get() async {
