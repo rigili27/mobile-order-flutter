@@ -1,4 +1,4 @@
-package com.bitdesing.tomapedidos
+package com.gestionerp.movil
 
 import io.flutter.embedding.android.FlutterActivity
 

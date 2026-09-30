@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import 'core/api/api_config.dart';
 import 'core/database/database_helper.dart';
 import 'core/theme/brand_colors.dart';
+import 'core/update/update_client.dart';
+import 'core/update/update_controller.dart';
+import 'core/update/update_widgets.dart';
 import 'core/database/orden_preparacion_database_helper.dart';
 import 'presentation/providers/api_sync_provider.dart';
 import 'presentation/providers/auth_provider.dart';
@@ -10,7 +13,6 @@ import 'presentation/providers/ftp_provider.dart';
 import 'presentation/providers/orden_preparacion_provider.dart';
 import 'presentation/providers/pedido_provider.dart';
 import 'presentation/providers/reparto_provider.dart';
-import 'presentation/providers/update_provider.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/login/login_screen.dart';
 import 'presentation/screens/reparto/reparto_home_screen.dart';
@@ -22,8 +24,8 @@ import 'presentation/screens/settings/settings_screen.dart';
 /// de `_AppRoot` (ver `AuthProvider.logout()` + `_onAuthChanged`).
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
-class TomaPedidosApp extends StatelessWidget {
-  const TomaPedidosApp({super.key});
+class GestionErpMovilApp extends StatelessWidget {
+  const GestionErpMovilApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -35,11 +37,24 @@ class TomaPedidosApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => FtpProvider()),
         ChangeNotifierProvider(create: (_) => ApiSyncProvider()),
         ChangeNotifierProvider(create: (_) => RepartoProvider()),
-        ChangeNotifierProvider(create: (_) => UpdateProvider()),
+        // Después de los providers de arriba: los lee para saber si hay
+        // algo en curso (ver lib/core/update/).
+        ChangeNotifierProvider(create: _createUpdateController),
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
-        title: 'Toma Pedidos',
+        title: 'GestionERP Móvil',
+        builder: (context, child) => UpdateGate(
+          controller: context.read<UpdateController>(),
+          navigatorKey: rootNavigatorKey,
+          watch: [
+            context.read<PedidoProvider>(),
+            context.read<OrdenPreparacionProvider>(),
+            context.read<ApiSyncProvider>(),
+            context.read<RepartoProvider>(),
+          ],
+          child: child!,
+        ),
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
@@ -64,6 +79,34 @@ class TomaPedidosApp extends StatelessWidget {
       ),
     );
   }
+}
+
+UpdateController _createUpdateController(BuildContext context) {
+  final pedido = context.read<PedidoProvider>();
+  final orden = context.read<OrdenPreparacionProvider>();
+  final apiSync = context.read<ApiSyncProvider>();
+  final reparto = context.read<RepartoProvider>();
+
+  String? busyReason() {
+    if (pedido.hasItems || pedido.saving) return 'Terminá o descartá el pedido que estás cargando.';
+    if (orden.hasItems || orden.saving) return 'Terminá o descartá la orden de preparación en curso.';
+    if (apiSync.busy || reparto.syncing) return 'Esperá a que termine la sincronización.';
+    return null;
+  }
+
+  return UpdateController(
+    client: UpdateClient(app: 'movil'),
+    isBusy: () => busyReason() != null,
+    busyReason: busyReason,
+    pendingWarning: () {
+      final pendientes = apiSync.pendientes + apiSync.cobranzasPendientes + reparto.pendientes;
+      if (pendientes == 0) return null;
+      return 'Hay $pendientes envío(s) pendientes de sincronizar. No se pierden al actualizar, '
+          'pero conviene sincronizar antes.';
+    },
+    // En modo WiFi no hay tenant: el ERP responde con el canal estable.
+    tenant: ApiConfig.tenant,
+  )..start();
 }
 
 class _AppRoot extends StatefulWidget {

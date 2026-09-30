@@ -12,5 +12,5 @@ void main() async {
   ]);
   await AppMode.refresh(); // decide moviles.db vs moviles_api.db antes de abrir
   await DatabaseHelper.instance.init();
-  runApp(const TomaPedidosApp());
+  runApp(const GestionErpMovilApp());
 }

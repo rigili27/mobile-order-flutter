@@ -1,0 +1,116 @@
+name: Release
+
+# Un tag vX.Y.Z (o vX.Y.Z-beta) compila la app firmada con la clave de
+# release, la sube al bucket de R2 y la registra en el ERP como borrador
+# (se publica desde Landlord → Apps). Ver tool/ y docs/deploy.md del ERP.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  APP: movil
+  # Sin bucket o sin ERP configurados, igual se compila, se verifica la
+  # firma y se crea el GitHub Release; solo se saltea publicar en el ERP.
+  PUBLISH_TO_ERP: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID != '' && secrets.ERP_RELEASES_TOKEN != '' && vars.ERP_LANDLORD_URL != '' }}
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Versión y canal
+        id: version
+        run: tool/release_version.sh "$GITHUB_REF_NAME"
+
+      - name: Notas de la versión
+        run: |
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          notes="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          [ -n "$notes" ] || notes="$(git log -1 --format=%B)"
+          printf '%s\n' "$notes" > "$RUNNER_TEMP/notes.md"
+
+      - name: Clave de release
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          [ -n "$ANDROID_KEYSTORE_BASE64" ] || { echo "::error::Falta el secret ANDROID_KEYSTORE_BASE64"; exit 1; }
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Compilar APKs
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD: ${{ steps.version.outputs.build }}
+          ERP_UPDATES_URL: ${{ vars.ERP_LANDLORD_URL }}
+        run: |
+          flutter pub get
+          args=(--release --build-name="$VERSION" --build-number="$BUILD" --dart-define=ERP_UPDATES_URL="$ERP_UPDATES_URL")
+          mkdir -p dist
+
+          # Por ABI: los que baja el actualizador (más livianos).
+          flutter build apk "${args[@]}" --split-per-abi
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            cp "build/app/outputs/flutter-apk/app-${abi}-release.apk" "dist/${APP}-${VERSION}-${abi}.apk"
+          done
+
+          # Universal: el de la primera instalación desde el navegador.
+          flutter build apk "${args[@]}"
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/${APP}-${VERSION}-universal.apk"
+          ls -l dist
+
+      - name: Verificar la firma
+        env:
+          EXPECTED_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          expected="$(echo "$EXPECTED_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')"
+          [ -n "$expected" ] || { echo "::error::Falta la variable ANDROID_CERT_SHA256"; exit 1; }
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          for apk in dist/*.apk; do
+            got="$("$apksigner" verify --print-certs "$apk" | grep -m1 'SHA-256 digest' | awk '{print $NF}')"
+            if [ "$got" != "$expected" ]; then
+              echo "::error::$apk está firmado con $got y se esperaba $expected"
+              exit 1
+            fi
+          done
+          echo "Los APKs están firmados con la clave de release."
+
+      - name: Publicar en el ERP
+        if: env.PUBLISH_TO_ERP == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CHANNEL: ${{ steps.version.outputs.channel }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_RELEASES_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_RELEASES_BUCKET }}
+          ERP_URL: ${{ vars.ERP_LANDLORD_URL }}
+          ERP_TOKEN: ${{ secrets.ERP_RELEASES_TOKEN }}
+        run: NOTES_FILE="$RUNNER_TEMP/notes.md" tool/publish_release.sh android dist/*.apk
+
+      - name: Aviso si no se publicó en el ERP
+        if: env.PUBLISH_TO_ERP != 'true'
+        run: echo "::warning::No se publicó en el ERP: faltan R2_RELEASES_ACCESS_KEY_ID, ERP_RELEASES_TOKEN o ERP_LANDLORD_URL en el repo."
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          body_path: ${{ runner.temp }}/notes.md
+          prerelease: ${{ steps.version.outputs.channel == 'beta' }}
