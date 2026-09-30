@@ -93,7 +93,8 @@ Future<void> verifyDownloadedFile(File file, ReleaseDownload download) async {
 /// Abre el instalador del sistema. En Android el usuario confirma la
 /// instalación (no hay forma de evitarlo sin MDM) y el sistema reinicia la
 /// app al terminar. En Windows corre el Setup en silencio y cierra la app
-/// (Inno Setup la vuelve a abrir). En Linux instala el .deb con pkexec.
+/// (el Setup la vuelve a abrir al terminar). En Linux instala el .deb con
+/// pkexec y reabre la app con el binario nuevo.
 Future<void> installRelease(File file) async {
   if (Platform.isAndroid) {
     final result = await OpenFilex.open(file.path, type: 'application/vnd.android.package-archive');
@@ -111,7 +112,7 @@ Future<void> installRelease(File file) async {
   if (Platform.isWindows) {
     await Process.start(
       file.path,
-      ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS'],
+      ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS'],
       mode: ProcessStartMode.detached,
     );
     exit(0);
@@ -124,7 +125,9 @@ Future<void> installRelease(File file) async {
         'No se pudo instalar la actualización (${result.exitCode}). Instalala a mano con: sudo apt install ${file.path}',
       );
     }
-    return;
+    // Mismo path, binario nuevo; hereda el entorno que armó el lanzador.
+    await Process.start(Platform.resolvedExecutable, [], mode: ProcessStartMode.detached);
+    exit(0);
   }
 
   throw UpdateInstallException('Esta plataforma no admite actualizaciones automáticas.');
