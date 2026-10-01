@@ -25,6 +25,8 @@ export AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
 
 prefix="apps/${APP}/${platform}/${VERSION}"
 assets='[]'
+payload="$(mktemp)"
+trap 'rm -f "$payload"' EXIT
 
 for file in "$@"; do
   name="$(basename "$file")"
@@ -52,7 +54,7 @@ jq -n \
   --arg app "$APP" --arg platform "$platform" --arg channel "$CHANNEL" --arg version "$VERSION" \
   --rawfile notes "$NOTES_FILE" --argjson assets "$assets" \
   '{app: $app, platform: $platform, channel: $channel, version: $version, notes: $notes, assets: $assets}' \
-  > "${RUNNER_TEMP:-/tmp}/release-payload.json"
+  > "$payload"
 
 echo "Registrando ${APP} ${VERSION} (${platform}, ${CHANNEL}) en el ERP…"
 curl --fail-with-body -sS --retry 3 --retry-all-errors \
@@ -60,5 +62,5 @@ curl --fail-with-body -sS --retry 3 --retry-all-errors \
   -H "Authorization: Bearer ${ERP_TOKEN}" \
   -H "Accept: application/json" \
   -H "Content-Type: application/json" \
-  --data "@${RUNNER_TEMP:-/tmp}/release-payload.json"
+  --data "@${payload}"
 echo
