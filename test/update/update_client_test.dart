@@ -79,4 +79,14 @@ void main() {
     expect(client.isConfigured, isFalse);
     expect(() => client.fetchLatest(platform: 'android', currentVersion: '2.0.0'), throwsA(isA<UpdateCheckException>()));
   });
+
+  test('solo acepta https, salvo la propia máquina en desarrollo', () {
+    expect(isAllowedUpdateUri(Uri.parse('https://landlord.miempresa.com')), isTrue);
+    expect(isAllowedUpdateUri(Uri.parse('http://landlord.localhost')), isTrue);
+    expect(isAllowedUpdateUri(Uri.parse('http://127.0.0.1:8000')), isTrue);
+    expect(isAllowedUpdateUri(Uri.parse('http://landlord.miempresa.com')), isFalse);
+    expect(isAllowedUpdateUri(Uri.parse('ftp://landlord.miempresa.com')), isFalse);
+
+    expect(UpdateClient(app: 'firma', baseUrl: 'http://landlord.miempresa.com').isConfigured, isFalse);
+  });
 }

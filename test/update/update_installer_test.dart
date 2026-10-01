@@ -40,4 +40,18 @@ void main() {
     await expectLater(verifyDownloadedFile(truncated, downloadFor(bytes)), throwsA(isA<UpdateInstallException>()));
     expect(await truncated.exists(), isFalse);
   });
+
+  test('el nombre del archivo nunca puede ser una ruta', () {
+    expect(safeFilename('firma-2.1.0-arm64-v8a.apk'), 'firma-2.1.0-arm64-v8a.apk');
+    for (final bad in ['../../.bashrc', '/etc/passwd', 'a/b.apk', '..', '.oculto', r'C:\x.exe', '']) {
+      expect(() => safeFilename(bad), throwsA(isA<UpdateInstallException>()), reason: bad);
+    }
+  });
+
+  test('no descarga por http contra un servidor que no es la propia máquina', () async {
+    final download = downloadFor([1, 2, 3]);
+    final insecure = ReleaseDownload(url: 'http://landlord.miempresa.com/x', filename: download.filename, sha256: download.sha256, size: download.size);
+
+    await expectLater(downloadRelease(insecure), throwsA(isA<UpdateInstallException>()));
+  });
 }
