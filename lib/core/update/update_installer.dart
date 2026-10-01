@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'update_client.dart';
 import 'update_info.dart';
 
 class UpdateInstallException implements Exception {
@@ -43,10 +44,16 @@ Future<File> downloadRelease(
   void Function(double progress)? onProgress,
   http.Client? client,
 }) async {
+  final uri = Uri.parse(download.url);
+  if (!isAllowedUpdateUri(uri)) {
+    throw UpdateInstallException('El link de descarga no es seguro (https). No se descargó nada.');
+  }
+  final filename = safeFilename(download.filename);
+
   final httpClient = client ?? http.Client();
   final http.StreamedResponse response;
   try {
-    response = await httpClient.send(http.Request('GET', Uri.parse(download.url)));
+    response = await httpClient.send(http.Request('GET', uri));
   } catch (_) {
     throw UpdateInstallException('No se pudo descargar la actualización. Verificá la conexión a internet.');
   }
@@ -57,7 +64,7 @@ Future<File> downloadRelease(
 
   final dir = Directory('${(await getTemporaryDirectory()).path}/updates');
   await dir.create(recursive: true);
-  final file = File('${dir.path}/${download.filename}');
+  final file = File('${dir.path}/$filename');
   final sink = file.openWrite();
 
   final total = download.size > 0 ? download.size : (response.contentLength ?? 0);
@@ -78,6 +85,15 @@ Future<File> downloadRelease(
   await verifyDownloadedFile(file, download);
 
   return file;
+}
+
+/// El nombre del archivo lo manda el ERP: se usa solo si es un nombre
+/// simple, nunca una ruta (un "../" escribiría fuera de la carpeta temporal).
+String safeFilename(String name) {
+  if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9._-]*$').hasMatch(name) || name.contains('..')) {
+    throw UpdateInstallException('El nombre del archivo de la actualización no es válido. No se descargó nada.');
+  }
+  return name;
 }
 
 Future<void> verifyDownloadedFile(File file, ReleaseDownload download) async {

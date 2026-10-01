@@ -12,6 +12,15 @@ import 'update_info.dart';
 /// build de desarrollo sin ese define, las actualizaciones quedan apagadas.
 const erpUpdatesUrl = String.fromEnvironment('ERP_UPDATES_URL');
 
+/// Solo https: el instalador se ejecuta con permisos de administrador en
+/// escritorio, así que nunca se baja por un canal que se pueda interceptar.
+/// http se acepta solo contra la propia máquina (desarrollo local).
+bool isAllowedUpdateUri(Uri uri) {
+  if (uri.scheme == 'https') return true;
+  final host = uri.host;
+  return uri.scheme == 'http' && (host == 'localhost' || host == '127.0.0.1' || host.endsWith('.localhost'));
+}
+
 class UpdateCheckException implements Exception {
   UpdateCheckException(this.message);
   final String message;
@@ -30,7 +39,7 @@ class UpdateClient {
   final String _baseUrl;
   final http.Client _client;
 
-  bool get isConfigured => _baseUrl.isNotEmpty;
+  bool get isConfigured => _baseUrl.isNotEmpty && isAllowedUpdateUri(Uri.parse(_baseUrl));
 
   Future<UpdateInfo> fetchLatest({
     required String platform,
@@ -39,7 +48,7 @@ class UpdateClient {
     String? tenant,
   }) async {
     if (!isConfigured) {
-      throw UpdateCheckException('Este build no tiene configurado el servidor de actualizaciones.');
+      throw UpdateCheckException('Este build no tiene configurado el servidor de actualizaciones (o no es https).');
     }
 
     final uri = Uri.parse('$_baseUrl/api/apps/$app/latest').replace(queryParameters: {
