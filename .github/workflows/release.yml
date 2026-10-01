@@ -68,7 +68,10 @@ jobs:
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # En un keystore PKCS12 (el que genera keytool) la clave tiene la
+          # misma contraseña que el almacén: un secret aparte solo servía
+          # para cargarlo distinto y que falle recién al firmar.
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           VERSION: ${{ steps.version.outputs.version }}
           BUILD: ${{ steps.version.outputs.build }}
           ERP_UPDATES_URL: ${{ vars.ERP_LANDLORD_URL }}
