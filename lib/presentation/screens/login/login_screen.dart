@@ -145,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           size: 64, color: kLabgeVioleta),
                       const SizedBox(height: 8),
                       Text(
-                        'Toma Pedidos',
+                        'GestionERP Móvil',
                         style: Theme.of(context)
                             .textTheme
                             .headlineSmall

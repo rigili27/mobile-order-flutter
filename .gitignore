@@ -30,3 +30,7 @@ Thumbs.db
 
 # Claude Code local config
 .claude/
+
+# Claves de firma: viven fuera del repo (~/claves-apps).
+*.jks
+*.keystore

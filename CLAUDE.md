@@ -8,11 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Run on connected Android device
 flutter run
 
-# Build release APK
-flutter build apk --release
+# Build release APK (needs android/key.properties, see "Release" below)
+flutter build apk --release --dart-define=ERP_UPDATES_URL=https://landlord.<domain>
 
-# Analyze (no tests exist in this project)
+# Analyze
 flutter analyze
+
+# Tests (only the updater has tests: test/update/)
+flutter test
 
 # Get dependencies after pubspec changes
 flutter pub get
@@ -108,3 +111,11 @@ Captured as `Uint8List` (JPEG bytes) via the `signature` package. Stored as BLOB
 | Order save logic | `lib/presentation/providers/pedido_provider.dart` |
 | PDF receipt | `lib/core/services/pdf_service.dart` |
 | App root / boot | `lib/app.dart` |
+
+## Release, signing and updates
+
+- The app is **GestionERP Móvil**, package `com.gestionerp.movil` (it was "Toma Pedidos", `com.bitdesing.tomapedidos`; devices with the old app are reinstalled by hand). Version 2.0.0 onwards.
+- Release builds are always signed with the release key: `android/key.properties` locally (gitignored; `storeFile=/home/<user>/claves-apps/movil-release.jks`, `storePassword`, `keyAlias=movil`, `keyPassword`) or the `ANDROID_*` env vars in CI. Without them the release build **fails on purpose** instead of signing with the debug key.
+- Publishing: bump `version:` in pubspec (`X.Y.Z+<(X*10000+Y*100+Z)*10000>`, see `tool/release_version.sh`), commit, `git tag -a vX.Y.Z -m "notes"` and push the tag (`vX.Y.Z-beta` for the beta channel). `.github/workflows/release.yml` builds per-ABI + universal APKs, checks the certificate fingerprint, uploads to R2 and registers the version in the ERP as a draft; it is published from the ERP landlord → Apps.
+- Updates come from the ERP, not GitHub: `lib/core/update/` (`UpdateController`, a `ChangeNotifier` provided in `app.dart`; `UpdateGate` in `MaterialApp.builder` shows the "Nueva versión — Actualizar" banner and the mandatory-update screen). It is busy (install disabled) while a pedido/orden is being loaded or a sync is running (`_createUpdateController` in `app.dart`). `lib/core/update/`, `test/update/` and `tool/` are **copied identically** in firma-digital and kiosko-pos-flutter: change them in the three apps.
+- First install on a new device: ERP → Configuración → Apps → QR/link of GestionERP Móvil (shown when the tenant has PreventaMovil or Reparto).

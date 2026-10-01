@@ -5,8 +5,6 @@ import '../../../data/repositories/parametros_repository.dart';
 import '../../providers/api_sync_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/pedido_provider.dart';
-import '../../providers/update_provider.dart';
-import '../../widgets/update_dialog.dart';
 import '../admin/configuracion_avanzada_screen.dart';
 import '../articulos/articulos_screen.dart';
 import '../cobranzas/cobranzas_screen.dart';
@@ -42,10 +40,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _reloadConfig();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkForUpdates();
-      _autoSync();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoSync());
   }
 
   @override
@@ -64,19 +59,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _autoSync() async {
     final cambio = await context.read<ApiSyncProvider>().autoSync();
     if (cambio && mounted) _reloadConfig();
-  }
-
-  void _checkForUpdates() {
-    context.read<UpdateProvider>().checkForUpdate().then((_) {
-      if (!mounted) return;
-      final upd = context.read<UpdateProvider>();
-      if (upd.state == UpdateState.updateAvailable && upd.updateInfo != null) {
-        showDialog(
-          context: context,
-          builder: (_) => const UpdateDialog(),
-        );
-      }
-    });
   }
 
   Future<void> _reloadConfig() async {
@@ -113,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Toma Pedidos', style: TextStyle(fontSize: 18)),
+            const Text('GestionERP Móvil', style: TextStyle(fontSize: 18)),
             if (vendedor != null)
               Text(vendedor.nombre,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal)),

@@ -172,7 +172,7 @@ class _HojaRutaMapaScreenState extends State<HojaRutaMapaScreen> {
         children: [
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.labge.tomapedidos',
+            userAgentPackageName: 'com.gestionerp.movil',
             maxZoom: 19,
           ),
           if (recorrido.length > 1)

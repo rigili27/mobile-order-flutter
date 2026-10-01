@@ -17,8 +17,8 @@ import '../../../data/models/parametros.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/ftp_provider.dart';
-import '../../providers/update_provider.dart';
-import '../../widgets/update_dialog.dart';
+import '../../../core/update/update_controller.dart';
+import '../../../core/update/update_widgets.dart';
 import '../login/login_screen.dart';
 import '../login/qr_pairing_screen.dart';
 import 'api_server_card.dart';
@@ -394,7 +394,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final ftp = context.watch<FtpProvider>();
-    final upd = context.watch<UpdateProvider>();
+    final upd = context.watch<UpdateController>();
 
     return Scaffold(
       appBar: AppBar(
@@ -416,12 +416,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'Versión instalada: ${_appVersion.isEmpty ? '…' : _appVersion}',
                     style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
-                  if (upd.state == UpdateState.updateAvailable &&
-                      upd.updateInfo != null)
+                  if (upd.updateAvailable)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        'Versión ${upd.updateInfo!.version} disponible',
+                        'Versión ${upd.latest!.version} disponible',
                         style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Colors.green.shade700),
@@ -429,17 +428,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
-                    onPressed: upd.state == UpdateState.checking
+                    onPressed: upd.status == UpdateStatus.checking || upd.working
                         ? null
                         : () async {
-                            await upd.checkForUpdate();
+                            final error = await upd.check(manual: true);
                             if (!context.mounted) return;
-                            final current = context.read<UpdateProvider>();
-                            if (current.state == UpdateState.updateAvailable) {
-                              showDialog(
-                                context: context,
-                                builder: (_) => const UpdateDialog(),
+                            if (error != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(error)),
                               );
+                            } else if (upd.updateAvailable) {
+                              await runUpdate(context, upd);
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -447,14 +446,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               );
                             }
                           },
-                    icon: upd.state == UpdateState.checking
+                    icon: upd.status == UpdateStatus.checking
                         ? const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.system_update_outlined),
-                    label: Text(upd.state == UpdateState.checking
+                    label: Text(upd.status == UpdateStatus.checking
                         ? 'Verificando...'
                         : 'Buscar actualización'),
                     style: ElevatedButton.styleFrom(
