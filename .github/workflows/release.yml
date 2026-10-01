@@ -47,9 +47,21 @@ jobs:
       - name: Clave de release
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          [ -n "$ANDROID_KEYSTORE_BASE64" ] || { echo "::error::Falta el secret ANDROID_KEYSTORE_BASE64"; exit 1; }
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS; do
+            [ -n "${!name}" ] || { echo "::error::Falta el secret $name"; exit 1; }
+          done
+          # Se toleran espacios y saltos de línea pegados al copiar el secret.
+          if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/release.jks" 2>/dev/null; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 no es base64 válido. Volvé a cargarlo copiando el contenido de 'base64 -w0 <app>-release.jks > clave.b64' (sin el prompt de la terminal)."
+            exit 1
+          fi
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" > /dev/null; then
+            echo "::error::La clave se decodificó pero no abre con ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS: revisá la contraseña y el alias, o que el keystore cargado sea el de esta app."
+            exit 1
+          fi
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
       - name: Compilar APKs
