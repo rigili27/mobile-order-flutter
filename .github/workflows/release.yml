@@ -107,7 +107,7 @@ jobs:
 
       - name: Aviso si no se publicó en el ERP
         if: env.PUBLISH_TO_ERP != 'true'
-        run: echo "::warning::No se publicó en el ERP: faltan R2_RELEASES_ACCESS_KEY_ID, ERP_RELEASES_TOKEN o ERP_LANDLORD_URL en el repo."
+        run: echo "::warning::No se publicó en el ERP, faltan R2_RELEASES_ACCESS_KEY_ID, ERP_RELEASES_TOKEN o ERP_LANDLORD_URL en el repo."
 
       - uses: softprops/action-gh-release@v2
         with:
