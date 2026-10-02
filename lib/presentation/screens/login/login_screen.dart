@@ -31,7 +31,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String _version = '';
   bool _apiMode = false;
   bool _submitting = false;
-  bool _comoRepartidor = false;
 
   @override
   void initState() {
@@ -70,22 +69,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _submitting = true);
     try {
-      if (_apiMode && _comoRepartidor) {
-        final ok = await context
-            .read<AuthProvider>()
-            .loginRepartoConApi(_emailCtrl.text, _claveCtrl.text);
-        if (!ok || !mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const RepartoHomeScreen()),
-        );
-        return;
-      }
       if (_apiMode) {
-        final ok = await context
+        // El rol del usuario decide el modo: el ERP lo devuelve en el login.
+        final modo = await context
             .read<AuthProvider>()
             .loginConApi(_emailCtrl.text, _claveCtrl.text);
-        if (!ok || !mounted) return;
+        if (modo == null || !mounted) return;
+        if (modo == 'reparto') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const RepartoHomeScreen()),
+          );
+          return;
+        }
         // Trae el catálogo actualizado tras iniciar sesión.
         final synced =
             await context.read<ApiSyncProvider>().sincronizarCatalogo();
@@ -232,17 +228,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         textInputAction: TextInputAction.done,
                         onFieldSubmitted: (_) => _login(),
                       ),
-
-                      if (_apiMode)
-                        CheckboxListTile(
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          title: const Text('Ingresar como repartidor'),
-                          value: _comoRepartidor,
-                          onChanged: (v) =>
-                              setState(() => _comoRepartidor = v ?? false),
-                        ),
 
                       if (auth.errorMessage != null) ...[
                         const SizedBox(height: 12),

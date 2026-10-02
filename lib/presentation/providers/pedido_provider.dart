@@ -16,6 +16,11 @@ class ItemPedido {
   String comentario;
   int? deposito;
 
+  /// Precio que se precargó desde el catálogo (lista del cliente) antes de
+  /// que el vendedor lo tocara. Solo en modo API: viaja al ERP con el pedido
+  /// para que el administrador vea si el precio se cambió.
+  double? precioLista;
+
   ItemPedido({
     required this.articulo,
     required this.cantidad,
@@ -23,6 +28,7 @@ class ItemPedido {
     this.porDto = 0,
     this.comentario = '',
     this.deposito,
+    this.precioLista,
   });
 
   double get importe => PedidoDetalle.calcularImporte(
@@ -76,6 +82,7 @@ class PedidoProvider extends ChangeNotifier {
     if (idx >= 0) {
       _items[idx].cantidad += item.cantidad;
       _items[idx].precio = item.precio;
+      _items[idx].precioLista = item.precioLista;
       _items[idx].porDto = item.porDto;
       _items[idx].deposito = item.deposito;
     } else {
@@ -96,6 +103,14 @@ class PedidoProvider extends ChangeNotifier {
 
   void setFirma(List<int> bytes) {
     _firma = bytes;
+    notifyListeners();
+  }
+
+  /// Pedido de preventa sin entrega: descarta la firma (también la que ya
+  /// tenía, al editar) para que no quede una firma de una entrega que no hubo.
+  void quitarFirma() {
+    _firma = null;
+    _existingFirma = null;
     notifyListeners();
   }
 
@@ -158,6 +173,7 @@ class PedidoProvider extends ChangeNotifier {
                   porDto: d.porDto,
                   comentario: d.comentario,
                   deposito: d.deposito,
+                  precioLista: d.precioLista,
                 )).toList());
         _pedidoId = id;
         notifyListeners();
@@ -171,6 +187,9 @@ class PedidoProvider extends ChangeNotifier {
           nroPedido: _pedidoId,
           quienRecibio: cab.quienRecibio,
           firma: _existingFirma,
+          // Sin esto el auto-guardado de una edición borraba el tipo de venta
+          // (y ahora ese pedido se vuelve a subir al ERP al salir).
+          tipoVenta: _tipoVenta,
         );
         await _repo.updatePedido(
           _pedidoId!,
@@ -185,6 +204,7 @@ class PedidoProvider extends ChangeNotifier {
                 porDto: d.porDto,
                 comentario: d.comentario,
                 deposito: d.deposito,
+                precioLista: d.precioLista,
               )).toList(),
         );
       }
@@ -232,6 +252,7 @@ class PedidoProvider extends ChangeNotifier {
                   porDto: i.porDto,
                   comentario: i.comentario,
                   deposito: i.deposito,
+                  precioLista: i.precioLista,
                 ))
             .toList();
         await _repo.updatePedido(_pedidoId!, cab, detalles);
@@ -265,6 +286,7 @@ class PedidoProvider extends ChangeNotifier {
                   porDto: i.porDto,
                   comentario: i.comentario,
                   deposito: i.deposito,
+                  precioLista: i.precioLista,
                 ))
             .toList();
         await _repo.insertDetalles(detalles);
@@ -334,6 +356,7 @@ class PedidoProvider extends ChangeNotifier {
             porDto: i.porDto,
             comentario: i.comentario,
             deposito: i.deposito,
+            precioLista: i.precioLista,
           ))
       .toList();
 }

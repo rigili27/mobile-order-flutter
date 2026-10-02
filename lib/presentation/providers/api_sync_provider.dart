@@ -90,6 +90,7 @@ class ApiSyncProvider extends ChangeNotifier {
       await _importer.import(catalogo);
       await ApiConfig.markSynced();
       ParametrosRepository.invalidateCache();
+      await actualizarEstadosPedidos();
       _advertencias = (catalogo['advertencias'] as List?)
               ?.map((e) => e.toString())
               .toList() ??
@@ -173,13 +174,21 @@ class ApiSyncProvider extends ChangeNotifier {
         _fail('No se encontró el pedido local.');
         return false;
       }
-      final salesDocumentId = await _api.pushPedido(payload);
+      // Ya subido: el vendedor lo modificó y se reemplaza en el ERP (mientras
+      // no esté remitido ni facturado). Si no, es un alta.
+      final entry = await _outbox.find(idPedidoLocal);
+      final salesDocumentId = entry?.yaEnErp == true
+          ? await _api.updatePedido(uuid, payload)
+          : await _api.pushPedido(payload);
       await _outbox.markSincronizado(idPedidoLocal, salesDocumentId);
       _status = ApiSyncStatus.idle;
       await refreshState();
       return true;
     } on ApiException catch (e) {
       await _outbox.markError(idPedidoLocal, e.message);
+      // 422 al actualizar = probablemente lo remitieron o facturaron
+      // mientras tanto: se refresca el estado para bloquear la edición.
+      if (e.statusCode == 422) await actualizarEstadosPedidos();
       _fail(e.message);
       return false;
     } catch (e) {
@@ -189,10 +198,28 @@ class ApiSyncProvider extends ChangeNotifier {
     }
   }
 
+  /// Consulta en el ERP el estado de los pedidos ya subidos (remitido,
+  /// facturado…) y lo guarda en el outbox. Best-effort: sin conexión deja lo
+  /// último que se supo.
+  Future<void> actualizarEstadosPedidos() async {
+    if (!await ApiConfig.hasSession()) return;
+    try {
+      final uuids = await _outbox.uuidsEnErp();
+      if (uuids.isEmpty) return;
+      // De a tandas, para no armar URLs enormes.
+      for (var i = 0; i < uuids.length; i += 100) {
+        final tanda = uuids.sublist(i, i + 100 > uuids.length ? uuids.length : i + 100);
+        await _outbox.setEstadosErp(await _api.fetchEstadosPedidos(tanda));
+      }
+    } catch (_) {}
+  }
+
   /// Reintenta todos los pedidos pendientes / con error.
   Future<void> reintentarPendientes() async {
     final pendientes = await _outbox.pendientes();
     for (final entry in pendientes) {
+      // Remitido/facturado en el ERP: el cambio ya no entra, no insistir.
+      if (!entry.editable) continue;
       await subirPedido(entry.idPedidoLocal);
     }
   }
@@ -506,6 +533,8 @@ class ApiSyncProvider extends ChangeNotifier {
             'porDto': d.porDto,
             'comentario': d.comentario.isEmpty ? null : d.comentario,
             'deposito': d.deposito,
+            // Para que el ERP marque el pedido si el precio se cambió.
+            if (d.precioLista != null) 'precioLista': d.precioLista,
           },
       ],
     };

@@ -9,6 +9,10 @@ class PedidoDetalle {
   final double porDto;
   final String comentario;
   final int? deposito;
+  // Precio de lista precargado (modo API, ver ItemPedido.precioLista).
+  // Columna PRECIOLISTA: la agrega PedidoRepository la primera vez que hace
+  // falta, así una base WiFi (que viene de la PC) no se toca.
+  final double? precioLista;
 
   // Campos extendidos (join con ArtMovil)
   final String? descripcionArticulo;
@@ -25,6 +29,7 @@ class PedidoDetalle {
     this.porDto = 0,
     this.comentario = '',
     this.deposito,
+    this.precioLista,
     this.descripcionArticulo,
     this.sku = '',
   });
@@ -40,6 +45,7 @@ class PedidoDetalle {
         porDto: (map['PORDTO'] as num? ?? 0).toDouble(),
         comentario: (map['COMENTARIO'] as String? ?? '').trim(),
         deposito: map['DEPOSITO'] as int?,
+        precioLista: (map['PRECIOLISTA'] as num?)?.toDouble(),
         descripcionArticulo: map['DESCRIPCION'] as String?,
         sku: (map['SKU'] as String? ?? '').trim(),
       );
@@ -55,6 +61,7 @@ class PedidoDetalle {
         'PORDTO': porDto,
         'COMENTARIO': comentario,
         'DEPOSITO': deposito,
+        if (precioLista != null) 'PRECIOLISTA': precioLista,
       };
 
   /// Misma fórmula que `Modules\Facturacion\Support\LinePricing::compute()`

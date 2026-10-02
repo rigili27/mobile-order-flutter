@@ -16,6 +16,15 @@ class OutboxEntry {
   final int intentos;
   final String? ultimoError;
 
+  /// Estado del pedido en el ERP (`pendiente`, `remitido`, `facturado`,
+  /// `cancelado`), según la última consulta a `pedidos/estados`. null = el
+  /// ERP todavía no lo informó (no se subió o no se consultó).
+  final String? estadoErp;
+
+  /// false cuando el ERP ya lo remitió, facturó o canceló: la app no deja
+  /// editarlo (el ERP rechazaría el cambio igual).
+  final bool editable;
+
   OutboxEntry({
     required this.idPedidoLocal,
     required this.uuid,
@@ -23,7 +32,16 @@ class OutboxEntry {
     this.salesDocumentId,
     this.intentos = 0,
     this.ultimoError,
+    this.estadoErp,
+    this.editable = true,
   });
+
+  /// Ya subido alguna vez: los cambios van por PUT, no por un alta nueva.
+  bool get yaEnErp => salesDocumentId != null;
+
+  /// Remitido, facturado o cancelado en el ERP: el vendedor ya no tiene nada
+  /// que hacer con él (lo oculta el filtro "Solo pendientes").
+  bool get cerradoEnErp => estadoErp != null && estadoErp != 'pendiente';
 
   factory OutboxEntry.fromMap(Map<String, dynamic> m) => OutboxEntry(
         idPedidoLocal: m['id_pedido_local'] as int,
@@ -32,6 +50,8 @@ class OutboxEntry {
         salesDocumentId: m['sales_document_id'] as int?,
         intentos: (m['intentos'] as int?) ?? 0,
         ultimoError: m['ultimo_error'] as String?,
+        estadoErp: m['estado_erp'] as String?,
+        editable: (m['editable'] as int? ?? 1) == 1,
       );
 }
 
@@ -79,7 +99,7 @@ class SyncStateDatabaseHelper {
     final dir = await getApplicationDocumentsDirectory();
     return openDatabase(
       join(dir.path, 'movil_sync.db'),
-      version: 5,
+      version: 6,
       onCreate: (db, _) async {
         await db.execute(_kPedidoOutboxDDL);
         await db.execute(_kCobranzaLocalDDL);
@@ -112,6 +132,10 @@ class SyncStateDatabaseHelper {
           await db.execute(_kResourceSyncDDL);
           await db.execute(_kControlStockLocalDDL);
         }
+        if (oldVersion < 6) {
+          await db.execute('ALTER TABLE pedido_outbox ADD COLUMN estado_erp TEXT');
+          await db.execute('ALTER TABLE pedido_outbox ADD COLUMN editable INTEGER NOT NULL DEFAULT 1');
+        }
       },
     );
   }
@@ -124,7 +148,9 @@ class SyncStateDatabaseHelper {
       sales_document_id INTEGER,
       intentos INTEGER NOT NULL DEFAULT 0,
       ultimo_error TEXT,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      estado_erp TEXT,
+      editable INTEGER NOT NULL DEFAULT 1
     )
   ''';
 
@@ -342,6 +368,10 @@ class SyncStateDatabaseHelper {
         'intentos': existing.isNotEmpty ? existing.first['intentos'] : 0,
         'ultimo_error': null,
         'updated_at': DateTime.now().toIso8601String(),
+        // `replace` borra y reinserta la fila: sin esto se perdía lo último
+        // que informó el ERP.
+        'estado_erp': existing.isNotEmpty ? existing.first['estado_erp'] : null,
+        'editable': existing.isNotEmpty ? existing.first['editable'] : 1,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -389,6 +419,29 @@ class SyncStateDatabaseHelper {
       orderBy: 'id_pedido_local ASC',
     );
     return rows.map(OutboxEntry.fromMap).toList();
+  }
+
+  /// uuids de los pedidos que ya están en el ERP, para consultar su estado.
+  Future<List<String>> uuidsEnErp() async {
+    final db = await _database;
+    final rows = await db.query('pedido_outbox',
+        columns: ['uuid'], where: 'sales_document_id IS NOT NULL');
+    return rows.map((r) => r['uuid'] as String).toList();
+  }
+
+  /// Guarda lo que informó el ERP en `pedidos/estados`.
+  Future<void> setEstadosErp(List<({String uuid, String estado, bool editable})> estados) async {
+    final db = await _database;
+    final batch = db.batch();
+    for (final e in estados) {
+      batch.update(
+        'pedido_outbox',
+        {'estado_erp': e.estado, 'editable': e.editable ? 1 : 0},
+        where: 'uuid = ?',
+        whereArgs: [e.uuid],
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<int> countPendientes() async {

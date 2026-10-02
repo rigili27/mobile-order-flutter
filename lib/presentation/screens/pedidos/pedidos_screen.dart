@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/database/database_file_manager.dart';
 import '../../../core/services/pdf_service.dart';
@@ -36,7 +37,11 @@ class _PedidosScreenState extends State<PedidosScreen> {
   final _paramRepo = ParametrosRepository();
   final _vendedorRepo = VendedorRepository();
   List<PedidoCabecera> _pedidos = [];
-  Map<int, OutboxEstado> _syncEstados = {};
+  Map<int, OutboxEntry> _syncEstados = {};
+  // Oculta los pedidos que el ERP ya remitió, facturó o canceló: para el
+  // vendedor ya no hay nada que hacer con ellos. Se recuerda entre sesiones.
+  bool _soloPendientes = true;
+  static const _kSoloPendientes = 'pedidos_solo_pendientes';
   bool _loading = true;
   bool _generatingPdf = false;
   bool _sharingDb = false;
@@ -48,8 +53,31 @@ class _PedidosScreenState extends State<PedidosScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    SharedPreferences.getInstance().then((prefs) {
+      final v = prefs.getBool(_kSoloPendientes);
+      if (v != null && mounted) setState(() => _soloPendientes = v);
+    });
+    _load().then((_) => _refrescarEstadosErp());
   }
+
+  /// Trae del ERP en qué quedó cada pedido (en segundo plano: la lista local
+  /// se muestra primero, sin esperar a la red).
+  Future<void> _refrescarEstadosErp() async {
+    if (!_apiMode) return;
+    await context.read<ApiSyncProvider>().actualizarEstadosPedidos();
+    if (mounted) await _load();
+  }
+
+  Future<void> _setSoloPendientes(bool v) async {
+    setState(() => _soloPendientes = v);
+    try {
+      (await SharedPreferences.getInstance()).setBool(_kSoloPendientes, v);
+    } catch (_) {}
+  }
+
+  List<PedidoCabecera> get _visibles => _apiMode && _soloPendientes
+      ? _pedidos.where((p) => _syncEstados[p.id]?.cerradoEnErp != true).toList()
+      : _pedidos;
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -59,12 +87,12 @@ class _PedidosScreenState extends State<PedidosScreen> {
     }
     final simbolo = await ParametrosRepository.simboloMoneda();
     final apiMode = await ApiConfig.isConfigured();
-    final estados = <int, OutboxEstado>{};
+    final estados = <int, OutboxEntry>{};
     if (apiMode) {
       for (final p in _pedidos) {
         if (p.id == null) continue;
         final e = await SyncStateDatabaseHelper.instance.find(p.id!);
-        if (e != null) estados[p.id!] = e.estado;
+        if (e != null) estados[p.id!] = e;
       }
     }
     if (mounted) {
@@ -82,6 +110,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
     final sync = context.read<ApiSyncProvider>();
     setState(() => _syncing = true);
     await sync.reintentarPendientes();
+    await sync.actualizarEstadosPedidos();
     await _load();
     if (mounted) {
       setState(() {
@@ -203,6 +232,14 @@ class _PedidosScreenState extends State<PedidosScreen> {
             onSync: _sync,
             label: 'Pedidos',
           ),
+        if (_apiMode)
+          SwitchListTile(
+            dense: true,
+            title: const Text('Solo pendientes'),
+            subtitle: const Text('Oculta los pedidos ya remitidos o facturados'),
+            value: _soloPendientes,
+            onChanged: _setSoloPendientes,
+          ),
         Expanded(
           child: _buildLista(),
         ),
@@ -215,6 +252,18 @@ class _PedidosScreenState extends State<PedidosScreen> {
   }
 
   Widget _buildLista() {
+    final pedidos = _visibles;
+    if (!_loading && pedidos.isEmpty && _pedidos.isNotEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'No hay pedidos pendientes. Apagá "Solo pendientes" para ver los remitidos y facturados.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
     return _loading
           ? const Center(child: CircularProgressIndicator())
           : _pedidos.isEmpty
@@ -237,21 +286,23 @@ class _PedidosScreenState extends State<PedidosScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(
-                    itemCount: _pedidos.length,
+                    itemCount: pedidos.length,
                     itemBuilder: (_, i) => _PedidoTile(
-                      pedido: _pedidos[i],
+                      pedido: pedidos[i],
                       clienteRepo: _clienteRepo,
                       simbolo: _simbolo,
                       syncEstado: _apiMode
-                          ? (_syncEstados[_pedidos[i].id] ??
+                          ? (_syncEstados[pedidos[i].id]?.estado ??
                               OutboxEstado.pendiente)
                           : null,
+                      estadoErp: _syncEstados[pedidos[i].id]?.estadoErp,
+                      editable: _syncEstados[pedidos[i].id]?.editable ?? true,
                       onTap: () async {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
                               builder: (_) =>
-                                  PedidoDetalleScreen(idPedido: _pedidos[i].id!)),
+                                  PedidoDetalleScreen(idPedido: pedidos[i].id!)),
                         );
                         _load();
                       },
@@ -261,7 +312,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
                           context,
                           MaterialPageRoute(
                               builder: (_) =>
-                                  NuevoPedidoScreen(editPedidoId: _pedidos[i].id!)),
+                                  NuevoPedidoScreen(editPedidoId: pedidos[i].id!)),
                         );
                         _load();
                       },
@@ -286,6 +337,8 @@ class _PedidoTile extends StatelessWidget {
   final VoidCallback onEdit;
   final String simbolo;
   final OutboxEstado? syncEstado;
+  final String? estadoErp;
+  final bool editable;
 
   const _PedidoTile(
       {required this.pedido,
@@ -293,9 +346,20 @@ class _PedidoTile extends StatelessWidget {
       required this.onTap,
       required this.onEdit,
       required this.simbolo,
-      this.syncEstado});
+      this.syncEstado,
+      this.estadoErp,
+      this.editable = true});
 
   ({String label, Color color, IconData icon}) get _chip {
+    // Lo que ya hizo el ERP con el pedido manda sobre el estado de subida.
+    switch (estadoErp) {
+      case 'remitido':
+        return (label: 'Remitido', color: Colors.blueGrey, icon: Icons.local_shipping);
+      case 'facturado':
+        return (label: 'Facturado', color: Colors.blueGrey, icon: Icons.receipt);
+      case 'cancelado':
+        return (label: 'Cancelado', color: Colors.grey, icon: Icons.block);
+    }
     switch (syncEstado) {
       case OutboxEstado.sincronizado:
         return (label: 'Sincronizado', color: Colors.green, icon: Icons.cloud_done);
@@ -352,9 +416,9 @@ class _PedidoTile extends StatelessWidget {
             ],
           ),
           IconButton(
-            icon: const Icon(Icons.edit_outlined, size: 20),
-            tooltip: 'Editar',
-            onPressed: onEdit,
+            icon: Icon(editable ? Icons.edit_outlined : Icons.lock_outline, size: 20),
+            tooltip: editable ? 'Editar' : 'Ya no se puede editar',
+            onPressed: editable ? onEdit : null,
           ),
         ],
       ),

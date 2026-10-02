@@ -32,7 +32,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _state == AuthState.authenticated;
   bool get isAdmin => _vendedor?.codigo == _adminCodigo;
 
-  /// La sesión API se abrió en modo repartidor (QR o login de Reparto).
+  /// La sesión API se abrió en modo repartidor (QR o login con rol repartidor).
   bool get esRepartidor => _esRepartidor;
 
   static Vendedor get adminVendedor => _adminVendedor;
@@ -103,20 +103,39 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Login contra la API de GestionERP (modo API). `usuario` puede ser el
-  /// nombre de usuario o el email. Devuelve true si el token se obtuvo; el
-  /// catálogo se sincroniza aparte (ver ApiSyncProvider).
-  Future<bool> loginConApi(String usuario, String password) async {
+  /// nombre de usuario o el email. El ERP decide por el ROL del usuario en
+  /// qué modo entra: devuelve `'preventa'` o `'reparto'` (null si falló, con
+  /// el motivo en [errorMessage]). En preventa el catálogo se sincroniza
+  /// aparte (ver ApiSyncProvider).
+  Future<String?> loginConApi(String usuario, String password) async {
     _state = AuthState.loading;
     _errorMessage = null;
     notifyListeners();
 
     try {
       final info = await PackageInfo.fromPlatform();
-      final codigo = await _api.login(
+      final res = await _api.loginApp(
         usuario: usuario.trim(),
         password: password,
         deviceName: '${info.appName} ${info.version}',
       );
+
+      if (res['modo'] == 'reparto') {
+        await ApiConfig.setRole('repartidor');
+        final r = res['repartidor'] as Map<String, dynamic>;
+        final codigo = r['codigo'] as int;
+        _vendedor = Vendedor(codigo: codigo, nombre: (r['nombre'] as String?) ?? 'Repartidor', clave: '');
+        _esRepartidor = true;
+        _state = AuthState.authenticated;
+        await _persistSession(codigo, nombre: _vendedor!.nombre);
+        notifyListeners();
+        return 'reparto';
+      }
+
+      // Por si el dispositivo venía de una sesión de repartidor.
+      await ApiConfig.setRole(null);
+      _esRepartidor = false;
+      final codigo = (res['vendedor'] as Map<String, dynamic>)['codigo'] as int;
 
       // El row de VendMovil puede no existir todavía (primer login, antes de
       // sincronizar) o la base puede estar cerrada por el cambio de modo —
@@ -129,13 +148,13 @@ class AuthProvider extends ChangeNotifier {
       _state = AuthState.authenticated;
       await _persistSession(codigo);
       notifyListeners();
-      return true;
+      return 'preventa';
     } on ApiException catch (e) {
       _setError(e.message);
-      return false;
+      return null;
     } catch (e) {
       _setError('No se pudo iniciar sesión: $e');
-      return false;
+      return null;
     }
   }
 
@@ -179,37 +198,6 @@ class AuthProvider extends ChangeNotifier {
       return false;
     } catch (e) {
       _setError('No se pudo vincular el dispositivo: $e');
-      return false;
-    }
-  }
-
-  /// Login de repartidor por usuario/clave contra la API de Reparto. El
-  /// servidor + tenant ya tienen que estar configurados (modo API).
-  Future<bool> loginRepartoConApi(String usuario, String password) async {
-    _state = AuthState.loading;
-    _errorMessage = null;
-    notifyListeners();
-    try {
-      final info = await PackageInfo.fromPlatform();
-      final res = await _repartoApi.login(
-        usuario: usuario.trim(),
-        password: password,
-        deviceName: '${info.appName} ${info.version}',
-      );
-      await ApiConfig.setRole('repartidor');
-      final r = res['repartidor'] as Map<String, dynamic>;
-      final codigo = r['codigo'] as int;
-      _vendedor = Vendedor(codigo: codigo, nombre: (r['nombre'] as String?) ?? 'Repartidor', clave: '');
-      _esRepartidor = true;
-      _state = AuthState.authenticated;
-      await _persistSession(codigo, nombre: _vendedor!.nombre);
-      notifyListeners();
-      return true;
-    } on ApiException catch (e) {
-      _setError(e.message);
-      return false;
-    } catch (e) {
-      _setError('No se pudo iniciar sesión: $e');
       return false;
     }
   }

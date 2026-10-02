@@ -5,6 +5,18 @@ import '../models/pedido_detalle.dart';
 class PedidoRepository {
   final _db = DatabaseHelper.instance;
 
+  /// Agrega `PedDMovil.PRECIOLISTA` si falta, solo cuando algún renglón lo
+  /// trae (modo API): la base de assets/WiFi no tiene la columna. Sin caché
+  /// a propósito: al cambiar de modo la base se recrea.
+  Future<void> _ensurePrecioLista(List<PedidoDetalle> detalles) async {
+    if (detalles.every((d) => d.precioLista == null)) return;
+    final info = await _db.db.rawQuery('PRAGMA table_info(PedDMovil)');
+    final tiene = info.any((c) => (c['name'] as String? ?? '').toUpperCase() == 'PRECIOLISTA');
+    if (!tiene) {
+      await _db.db.execute('ALTER TABLE PedDMovil ADD COLUMN PRECIOLISTA REAL');
+    }
+  }
+
   static const _cabeceraSelect = '''
     SELECT p.*,
       (SELECT COALESCE(SUM(d.IMPORTE), 0) FROM PedDMovil d WHERE d.IDPEDIDO = p.ID) AS total
@@ -53,6 +65,7 @@ class PedidoRepository {
   }
 
   Future<void> insertDetalles(List<PedidoDetalle> detalles) async {
+    await _ensurePrecioLista(detalles);
     final batch = _db.db.batch();
     for (final d in detalles) {
       batch.insert('PedDMovil', d.toMap());
@@ -71,6 +84,7 @@ class PedidoRepository {
 
   Future<void> updatePedido(
       int id, PedidoCabecera cabecera, List<PedidoDetalle> detalles) async {
+    await _ensurePrecioLista(detalles);
     final batch = _db.db.batch();
     batch.update('PedCMovil', cabecera.toMap(), where: 'ID = ?', whereArgs: [id]);
     batch.delete('PedDMovil', where: 'IDPEDIDO = ?', whereArgs: [id]);

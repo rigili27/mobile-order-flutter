@@ -87,10 +87,11 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
   Widget _syncChip() {
     final sync = _sync;
     if (sync == null) return const SizedBox.shrink();
-    final (label, color, icon) = switch (sync.estado) {
-      OutboxEstado.sincronizado => ('Sincronizado con el ERP', Colors.green, Icons.cloud_done),
-      OutboxEstado.pendiente => ('Pendiente de subir', Colors.orange, Icons.cloud_upload),
-      OutboxEstado.error => ('Error al subir — reintentá desde Configuración', Colors.red, Icons.cloud_off),
+    final (label, color, icon) = switch (sync.estadoErp) {
+      'remitido' => ('Remitido en el ERP — ya no se puede editar', Colors.blueGrey, Icons.local_shipping),
+      'facturado' => ('Facturado en el ERP — ya no se puede editar', Colors.blueGrey, Icons.receipt),
+      'cancelado' => ('Cancelado en el ERP', Colors.grey, Icons.block),
+      _ => _chipSubida(sync),
     };
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -100,6 +101,20 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
         Expanded(child: Text(label, style: TextStyle(fontSize: 12, color: color))),
       ]),
     );
+  }
+
+  (String, Color, IconData) _chipSubida(OutboxEntry sync) {
+    return switch (sync.estado) {
+      OutboxEstado.sincronizado => ('Sincronizado con el ERP', Colors.green, Icons.cloud_done),
+      OutboxEstado.pendiente => ('Pendiente de subir', Colors.orange, Icons.cloud_upload),
+      OutboxEstado.error => (
+          sync.ultimoError != null
+              ? 'Error al subir: ${sync.ultimoError}'
+              : 'Error al subir — reintentá desde Configuración',
+          Colors.red,
+          Icons.cloud_off
+        ),
+    };
   }
 
   Future<void> _editarPedido() async {
@@ -174,9 +189,9 @@ class _PedidoDetalleScreenState extends State<PedidoDetalleScreen> {
         title: Text('Pedido #${_cabecera!.nroPedido ?? _cabecera!.id}'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Editar pedido',
-            onPressed: _editarPedido,
+            icon: Icon(_sync?.editable == false ? Icons.lock_outline : Icons.edit_outlined),
+            tooltip: _sync?.editable == false ? 'Ya remitido o facturado: no se puede editar' : 'Editar pedido',
+            onPressed: _sync?.editable == false ? null : _editarPedido,
           ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),

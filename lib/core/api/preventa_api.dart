@@ -77,6 +77,49 @@ class PreventaApi {
     return (body['vendedor'] as Map<String, dynamic>)['codigo'] as int;
   }
 
+  /// Login único de la app (`POST app/login`): el ERP decide por el ROL del
+  /// usuario si la sesión es de preventa o de reparto. Devuelve
+  /// `{modo: 'preventa', token, vendedor}` o `{modo: 'reparto', token,
+  /// repartidor}` y persiste el token.
+  ///
+  /// Un ERP anterior a este endpoint responde 404: se cae al login de
+  /// preventa de siempre (en ese servidor el repartidor entra por QR).
+  Future<Map<String, dynamic>> loginApp({
+    required String usuario,
+    required String password,
+    required String deviceName,
+  }) async {
+    final res = await _client
+        .post(
+          await _uri('app/login'),
+          headers: await _headers(auth: false),
+          body: jsonEncode({
+            'usuario': usuario,
+            'password': password,
+            'deviceName': deviceName,
+          }),
+        )
+        .timeout(_timeout);
+
+    if (res.statusCode == 404) {
+      final codigo = await login(
+          usuario: usuario, password: password, deviceName: deviceName);
+      return {
+        'modo': 'preventa',
+        'vendedor': {'codigo': codigo},
+      };
+    }
+
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(_errorMessage(body, 'No se pudo iniciar sesión.'),
+          statusCode: res.statusCode);
+    }
+
+    await ApiConfig.setToken(body['token'] as String);
+    return body;
+  }
+
   /// Canjea un código de emparejamiento (escaneado del QR) por un token
   /// Sanctum. No usa `ApiConfig` — la URL y el tenant vienen del propio QR y
   /// todavía no están persistidos. Devuelve `{token, vendedor, tenant}`.
@@ -172,6 +215,47 @@ class PreventaApi {
           statusCode: res.statusCode);
     }
     return body['id'] as int?;
+  }
+
+  /// Reenvía un pedido ya subido que el vendedor modificó. El ERP lo rechaza
+  /// (422) si ya lo remitió, facturó o canceló.
+  Future<int?> updatePedido(String uuid, Map<String, dynamic> payload) async {
+    final res = await _client
+        .put(
+          await _uri('pedidos/$uuid'),
+          headers: await _headers(),
+          body: jsonEncode(payload),
+        )
+        .timeout(_timeout);
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(_errorMessage(body, 'No se pudo actualizar el pedido.'),
+          statusCode: res.statusCode);
+    }
+    return body['id'] as int?;
+  }
+
+  /// Estado en el ERP de los pedidos del vendedor (`pendiente`, `remitido`,
+  /// `facturado`, `cancelado`) y si todavía se pueden editar.
+  Future<List<({String uuid, String estado, bool editable})>> fetchEstadosPedidos(
+      List<String> uuids) async {
+    final uri = (await _uri('pedidos/estados')).replace(
+      queryParameters: {'uuids[]': uuids},
+    );
+    final res = await _client.get(uri, headers: await _headers()).timeout(_timeout);
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(_errorMessage(body, 'No se pudo consultar el estado de los pedidos.'),
+          statusCode: res.statusCode);
+    }
+    return [
+      for (final p in (body['pedidos'] as List? ?? const []))
+        (
+          uuid: (p as Map<String, dynamic>)['uuid'] as String,
+          estado: p['estado'] as String,
+          editable: p['editable'] as bool? ?? false,
+        ),
+    ];
   }
 
   /// Sube una cobranza. Devuelve el id del `Receipt` (Borrador) creado en el ERP.

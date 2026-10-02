@@ -56,6 +56,9 @@ class Parametros {
   bool get permiteAltaClientes => _config['permite_alta_clientes'] != 'false';
   bool get permiteAltaArticulos => _config['permite_alta_articulos'] != 'false';
   bool get permiteVerPrecios => _config['permite_ver_precios'] != 'false';
+  // Modificar el precio que se precarga en un renglón del pedido. Ausente
+  // (ERP viejo o base sin resincronizar) = permitido, como fue siempre.
+  bool get permiteCambiarPrecio => _config['permite_cambiar_precio'] != 'false';
   bool get permiteStock => _config['permite_stock'] == 'true';
   bool get permiteGenerarCompra => _config['permite_generar_compra'] == 'true';
 

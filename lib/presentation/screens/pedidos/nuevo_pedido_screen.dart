@@ -17,6 +17,7 @@ import '../../../data/models/pedido_cabecera.dart';
 import '../../../data/repositories/parametros_repository.dart';
 import '../../../data/repositories/pedido_repository.dart';
 import '../../../core/api/api_config.dart';
+import '../../../core/database/sync_state_database_helper.dart';
 import '../../providers/api_sync_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/pedido_provider.dart';
@@ -45,6 +46,13 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
   bool _nroPedidoVisible = false;
   bool _ctaCteActivo = false;
   String _tipoVenta = 'C';
+  // La mayoría de las veces es preventa: se toma el pedido y la mercadería
+  // se entrega después. Solo si el vendedor entrega en el momento se piden
+  // quién recibe y la firma del cliente.
+  bool _entregaAhora = false;
+  // Hubo cambios en un pedido existente: al salir se vuelve a subir al ERP
+  // aunque no se toque GUARDAR (el auto-guardado ya los dejó en la base).
+  bool _modificado = false;
 
   static const _servicioOpciones = ['Garantía', 'Reparación', 'Reparación interna'];
   static const _tipoVentaOpciones = {
@@ -96,6 +104,27 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
       return;
     }
 
+    // Remitido o facturado en el ERP: el cambio no entraría. Se avisa y se
+    // vuelve, en vez de dejar editar algo que no se va a poder subir.
+    final sync = await SyncStateDatabaseHelper.instance.find(widget.editPedidoId!);
+    if (sync != null && !sync.editable) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('No se puede editar'),
+          content: Text(
+              'Este pedido ya fue ${sync.estadoErp ?? 'procesado'} en el sistema. '
+              'Si hay que cambiar algo, avisale a administración.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+          ],
+        ),
+      );
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     final detalles = await repo.getDetalles(widget.editPedidoId!);
     final cliente = await cliRepo.findByCodigo(cabecera.codCliente);
 
@@ -111,6 +140,7 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
           porDto: d.porDto,
           comentario: d.comentario,
           deposito: d.deposito,
+          precioLista: d.precioLista,
         ));
       }
     }
@@ -126,6 +156,8 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
       _selectedServicio = _servicioOpciones.contains(tipo) ? tipo : null;
       _notasCtrl.text = notas;
       _tipoVenta = cabecera.tipoVenta ?? 'C';
+      _entregaAhora = cabecera.quienRecibio.isNotEmpty ||
+          (cabecera.firma?.isNotEmpty ?? false);
       _loadingEdit = false;
     });
   }
@@ -144,6 +176,7 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
   // ── auto-guardado ──────────────────────────────────────────────────────────
 
   void _tryAutoSave() {
+    _modificado = true;
     final codVendedor = context.read<AuthProvider>().vendedor?.codigo;
     if (codVendedor != null) {
       context.read<PedidoProvider>().autoGuardar(codVendedor);
@@ -215,12 +248,14 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
     final provider = context.read<PedidoProvider>();
     final auth = context.read<AuthProvider>();
 
-    if (_sigController.isNotEmpty) {
+    if (!_entregaAhora) {
+      provider.quitarFirma();
+    } else if (_sigController.isNotEmpty) {
       final sigData = await _sigController.toPngBytes(height: 200, width: 400);
       if (sigData != null) provider.setFirma(sigData.toList());
     }
     provider.setNroPedido(int.tryParse(_nroPedidoCtrl.text.trim()));
-    provider.setQuienRecibio(_quienCtrl.text.trim());
+    provider.setQuienRecibio(_entregaAhora ? _quienCtrl.text.trim() : '');
     provider.setComentarios(PedidoCabecera.encodeComentarios(
         _selectedServicio ?? '', _notasCtrl.text.trim()));
     provider.setTipoVenta(_ctaCteActivo ? _tipoVenta : null);
@@ -229,6 +264,7 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
     if (!mounted) return;
 
     if (idPedido != null) {
+      _modificado = false; // ya se sube acá abajo
       provider.reset();
       // Modo API: encolar y subir el pedido al ERP (best-effort; si falla
       // queda "pendiente" en el outbox para reintentar).
@@ -262,7 +298,10 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
     return PopScope(
       canPop: !provider.hasItems || provider.pedidoId != null,
       onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
+        if (didPop) {
+          _subirSiSeModifico();
+          return;
+        }
         final nav = Navigator.of(context);
         final ok = await _onWillPop();
         if (ok && mounted) nav.pop();
@@ -450,52 +489,67 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
             ),
 
             const SizedBox(height: 16),
-            // ENTREGA
-            _SectionHeader(icon: Icons.handshake, title: 'Entrega'),
+            // ENTREGA (solo si el vendedor entrega la mercadería en el momento)
             Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: TextField(
-                  controller: _quienCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Quién recibió',
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+              child: SwitchListTile(
+                secondary: const Icon(Icons.local_shipping_outlined),
+                title: const Text('Entrego la mercadería ahora'),
+                subtitle: const Text(
+                    'Activalo si además de tomar el pedido le dejás los productos: '
+                    'pide quién recibe y la firma del cliente.'),
+                value: _entregaAhora,
+                onChanged: (v) => setState(() => _entregaAhora = v),
               ),
             ),
 
-            const SizedBox(height: 16),
-            // FIRMA
-            _SectionHeader(icon: Icons.draw, title: 'Firma del cliente'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(children: [
-                  Signature(
-                    controller: _sigController,
-                    height: 150,
-                    backgroundColor: Colors.grey.shade100,
+            if (_entregaAhora) ...[
+              const SizedBox(height: 16),
+              _SectionHeader(icon: Icons.handshake, title: 'Entrega'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: TextField(
+                    controller: _quienCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Quién recibió',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Text(
-                      _isEditing && provider.pedidoId != null
-                          ? 'Firma aquí para reemplazar la existente'
-                          : 'Firma aquí arriba',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: _sigController.clear,
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: const Text('Limpiar'),
-                    ),
-                  ]),
-                ]),
+                ),
               ),
-            ),
+
+              const SizedBox(height: 16),
+              // FIRMA
+              _SectionHeader(icon: Icons.draw, title: 'Firma del cliente'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(children: [
+                    Signature(
+                      controller: _sigController,
+                      height: 150,
+                      backgroundColor: Colors.grey.shade100,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Text(
+                        _isEditing && provider.pedidoId != null
+                            ? 'Firma aquí para reemplazar la existente'
+                            : 'Firma aquí arriba',
+                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: _sigController.clear,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('Limpiar'),
+                      ),
+                    ]),
+                  ]),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 24),
             if (provider.saving)
@@ -512,6 +566,20 @@ class _NuevoPedidoScreenState extends State<NuevoPedidoScreen> {
         ),
       ),
     );
+  }
+
+  /// Se sale de editar un pedido sin tocar GUARDAR: los cambios ya quedaron
+  /// en la base por el auto-guardado, así que se suben igual (el ERP los
+  /// acepta mientras el pedido no esté remitido ni facturado). Un pedido
+  /// nuevo no: hasta que no se guarda es un borrador del vendedor.
+  void _subirSiSeModifico() {
+    final id = widget.editPedidoId;
+    if (!_modificado || id == null) return;
+    _modificado = false;
+    final sync = context.read<ApiSyncProvider>();
+    ApiConfig.hasSession().then((ok) {
+      if (ok) sync.subirPedido(id);
+    });
   }
 
   Future<ItemPedido?> _editItem(ItemPedido item) async {
@@ -664,8 +732,11 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
   bool _apiMode = false;
   bool _permiteAltaArticulos = true;
   bool _permiteStockNegativo = true;
+  bool _permiteCambiarPrecio = true;
   int? _depositoAsignado;
   String? _barcodeSinMatch;
+  // Precio precargado del catálogo para el artículo elegido.
+  double? _precioLista;
 
   @override
   void initState() {
@@ -683,6 +754,9 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
     });
     ParametrosRepository.depositoAsignado().then((v) {
       if (mounted) setState(() => _depositoAsignado = v);
+    });
+    ParametrosRepository.permiteCambiarPrecio().then((v) {
+      if (mounted) setState(() => _permiteCambiarPrecio = v);
     });
   }
 
@@ -707,7 +781,9 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
       _selected = art;
       _depositos = depositos;
       _depositoSeleccionado = depositos.isNotEmpty ? depositos.first.codigo : null;
-      _precioCtrl.text = art.precioParaLista(widget.nrolPrecios).toStringAsFixed(2);
+      _precioLista = double.parse(
+          art.precioParaLista(widget.nrolPrecios).toStringAsFixed(2));
+      _precioCtrl.text = _precioLista!.toStringAsFixed(2);
     });
   }
 
@@ -748,7 +824,11 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
   void _confirm() {
     if (_selected == null) return;
     final cantidad = double.tryParse(_cantCtrl.text.replaceAll(',', '.')) ?? 0;
-    final precio = double.tryParse(_precioCtrl.text.replaceAll(',', '.')) ?? 0;
+    // Sin permiso de cambiar precios va siempre el de lista, aunque el campo
+    // se haya tocado de alguna forma.
+    final precio = _permiteCambiarPrecio
+        ? double.tryParse(_precioCtrl.text.replaceAll(',', '.')) ?? 0
+        : _precioLista ?? 0;
     final dto = double.tryParse(_dtoCtrl.text.replaceAll(',', '.')) ?? 0;
     if (cantidad <= 0) {
       ScaffoldMessenger.of(context)
@@ -773,6 +853,7 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
           porDto: dto,
           comentario: _comentCtrl.text.trim(),
           deposito: _depositoSeleccionado,
+          precioLista: _apiMode ? _precioLista : null,
         ));
     Navigator.pop(context);
   }
@@ -892,7 +973,7 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(
                   child: TextField(
                     controller: _cantCtrl,
@@ -904,14 +985,11 @@ class _AddProductoSheetState extends State<_AddProductoSheet> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: TextField(
+                  child: _PrecioField(
                     controller: _precioCtrl,
-                    decoration: const InputDecoration(
-                        labelText: 'Precio',
-                        prefixText: '\$',
-                        border: OutlineInputBorder()),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]'))],
+                    editable: _permiteCambiarPrecio,
+                    precioLista: _precioLista,
+                    onChanged: () => setState(() {}),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -981,10 +1059,14 @@ class _EditItemSheetState extends State<_EditItemSheet> {
   late final TextEditingController _precioCtrl;
   late final TextEditingController _dtoCtrl;
   late final TextEditingController _comentCtrl;
+  bool _permiteCambiarPrecio = true;
 
   @override
   void initState() {
     super.initState();
+    ParametrosRepository.permiteCambiarPrecio().then((v) {
+      if (mounted) setState(() => _permiteCambiarPrecio = v);
+    });
     _cantCtrl = TextEditingController(text: widget.item.cantidad.toStringAsFixed(2));
     _precioCtrl = TextEditingController(text: widget.item.precio.toStringAsFixed(2));
     _dtoCtrl = TextEditingController(text: widget.item.porDto.toStringAsFixed(2));
@@ -1016,7 +1098,7 @@ class _EditItemSheetState extends State<_EditItemSheet> {
           Text(widget.item.articulo.descripcion,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 12),
-          Row(children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(
                 child: TextField(
               controller: _cantCtrl,
@@ -1027,14 +1109,11 @@ class _EditItemSheetState extends State<_EditItemSheet> {
             )),
             const SizedBox(width: 8),
             Expanded(
-                child: TextField(
+                child: _PrecioField(
               controller: _precioCtrl,
-              decoration: const InputDecoration(
-                  labelText: 'Precio',
-                  prefixText: '\$',
-                  border: OutlineInputBorder()),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]'))],
+              editable: _permiteCambiarPrecio,
+              precioLista: widget.item.precioLista,
+              onChanged: () => setState(() {}),
             )),
             const SizedBox(width: 8),
             Expanded(
@@ -1059,8 +1138,10 @@ class _EditItemSheetState extends State<_EditItemSheet> {
             onPressed: () {
               final c = double.tryParse(_cantCtrl.text.replaceAll(',', '.')) ??
                   widget.item.cantidad;
-              final p = double.tryParse(_precioCtrl.text.replaceAll(',', '.')) ??
-                  widget.item.precio;
+              final p = _permiteCambiarPrecio
+                  ? double.tryParse(_precioCtrl.text.replaceAll(',', '.')) ??
+                      widget.item.precio
+                  : widget.item.precio;
               final d = double.tryParse(_dtoCtrl.text.replaceAll(',', '.')) ??
                   widget.item.porDto;
               Navigator.pop(
@@ -1072,6 +1153,7 @@ class _EditItemSheetState extends State<_EditItemSheet> {
                   porDto: d,
                   comentario: _comentCtrl.text.trim(),
                   deposito: widget.item.deposito,
+                  precioLista: widget.item.precioLista,
                 ),
               );
             },
@@ -1080,6 +1162,56 @@ class _EditItemSheetState extends State<_EditItemSheet> {
           const SizedBox(height: 8),
         ],
       ),
+    );
+  }
+}
+
+// ── Campo de precio de un renglón ─────────────────────────────────────────────
+
+/// Precio del renglón. Sin el permiso "cambiar precios" (rol del vendedor en
+/// el ERP) queda de solo lectura con el precio de lista. Si se puede editar y
+/// el valor ya no es el de lista, lo avisa: el ERP le marca el pedido al
+/// administrador como "precio modificado".
+class _PrecioField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool editable;
+  final double? precioLista;
+  final VoidCallback onChanged;
+
+  const _PrecioField({
+    required this.controller,
+    required this.editable,
+    required this.precioLista,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final actual = double.tryParse(controller.text.replaceAll(',', '.'));
+    final modificado = editable &&
+        precioLista != null &&
+        actual != null &&
+        (actual - precioLista!).abs() >= 0.005;
+
+    return TextField(
+      controller: controller,
+      readOnly: !editable,
+      onChanged: (_) => onChanged(),
+      decoration: InputDecoration(
+        labelText: 'Precio',
+        prefixText: '\$',
+        border: const OutlineInputBorder(),
+        filled: !editable,
+        suffixIcon: editable ? null : const Icon(Icons.lock_outline, size: 18),
+        helperText: !editable
+            ? 'Precio de lista'
+            : modificado
+                ? 'Lista: \$${precioLista!.toStringAsFixed(2)}'
+                : null,
+        helperStyle: modificado ? TextStyle(color: Colors.orange.shade800) : null,
+      ),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]'))],
     );
   }
 }

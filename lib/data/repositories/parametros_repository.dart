@@ -61,6 +61,11 @@ class ParametrosRepository {
     return _cache!.permiteVerPrecios;
   }
 
+  static Future<bool> permiteCambiarPrecio() async {
+    _cache ??= await ParametrosRepository().get();
+    return _cache!.permiteCambiarPrecio;
+  }
+
   static Future<bool> permiteStock() async {
     _cache ??= await ParametrosRepository().get();
     return _cache!.permiteStock;

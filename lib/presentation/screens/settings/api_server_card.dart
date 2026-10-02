@@ -5,6 +5,7 @@ import '../../../core/api/api_config.dart';
 import '../../providers/api_sync_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/reparto_provider.dart';
+import '../reparto/reparto_home_screen.dart';
 
 /// Card de "Servidor (API)" para la pantalla de Configuración. Convive con la
 /// card de Transferencia WiFi; si no se configura nada, la app sigue en modo
@@ -79,18 +80,30 @@ class _ApiServerCardState extends State<ApiServerCard> {
     await _guardarServidor();
     if (!mounted) return;
 
-    final ok = await context
+    final modo = await context
         .read<AuthProvider>()
         .loginConApi(_emailCtrl.text, _passCtrl.text);
     if (!mounted) return;
 
-    if (!ok) {
+    if (modo == null) {
       _snack(context.read<AuthProvider>().errorMessage ?? 'No se pudo iniciar sesión.',
           error: true);
       return;
     }
 
     _passCtrl.clear();
+
+    // Usuario con rol repartidor: no hay catálogo que sincronizar, directo a
+    // su Home.
+    if (modo == 'reparto') {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const RepartoHomeScreen()),
+        (_) => false,
+      );
+      return;
+    }
+
     setState(() => _hasSession = true);
     await _sincronizar();
   }
@@ -171,8 +184,8 @@ class _ApiServerCardState extends State<ApiServerCard> {
               const SizedBox(height: 12),
               if (!_hasSession && _isRepartidor)
                 const Text(
-                  'La sesión de repartidor se abre escaneando el QR o desde el '
-                  'login con la opción "Ingresar como repartidor".',
+                  'La sesión de repartidor se abre escaneando el QR o '
+                  'ingresando con tu usuario desde el login.',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                   textAlign: TextAlign.center,
                 )

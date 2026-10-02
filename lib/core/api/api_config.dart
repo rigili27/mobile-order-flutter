@@ -14,7 +14,7 @@ class ApiConfig {
   static const _kToken = 'api_token';
   static const _kLastSync = 'api_last_sync';
   // 'repartidor' cuando la sesión API se abrió en modo repartidor (QR o login
-  // de Reparto). Ausente = modo preventa normal.
+  // de un usuario con rol repartidor). Ausente = modo preventa normal.
   static const _kRole = 'api_role';
 
   static Future<String?> role() async =>
