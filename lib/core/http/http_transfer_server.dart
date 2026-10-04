@@ -165,7 +165,7 @@ String _buildHtml(String pcPath, String vendorName, String appVersion, bool orde
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GestionERP Móvil — Transferencia de Base de Datos</title>
+<title>LABGE Móvil — Transferencia de Base de Datos</title>
 <style>
   *{box-sizing:border-box}
   body{font-family:sans-serif;max-width:540px;margin:48px auto;padding:16px;color:#333}
@@ -203,7 +203,7 @@ String _buildHtml(String pcPath, String vendorName, String appVersion, bool orde
 </style>
 </head>
 <body>
-<h1>GestionERP Móvil — Transferencia</h1>
+<h1>LABGE Móvil — Transferencia</h1>
 <div class="vendor-badge">📱 Conectado al celular de ${vendorName.isNotEmpty ? vendorName : 'vendedor desconocido'}</div>
 
 <div class="card" style="background:#d3ecff">
@@ -274,6 +274,6 @@ document.getElementById('overlay').addEventListener('click',function(e){
   if(e.target===this)closeModal();
 });
 </script>
-${appVersion.isNotEmpty ? '<p style="text-align:center;font-size:.75rem;color:#aaa;margin-top:8px">GestionERP Móvil $appVersion</p>' : ''}
+${appVersion.isNotEmpty ? '<p style="text-align:center;font-size:.75rem;color:#aaa;margin-top:8px">LABGE Móvil $appVersion</p>' : ''}
 </body>
 </html>''';

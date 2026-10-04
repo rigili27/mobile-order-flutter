@@ -95,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('GestionERP Móvil', style: TextStyle(fontSize: 18)),
+            const Text('LABGE Móvil', style: TextStyle(fontSize: 18)),
             if (vendedor != null)
               Text(vendedor.nombre,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal)),

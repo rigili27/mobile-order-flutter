@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../../../core/api/api_config.dart';
@@ -141,11 +142,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.receipt_long,
-                          size: 64, color: kLabgeVioleta),
+                      SvgPicture.asset(
+                        'assets/logo/labge-logo-sm.svg',
+                        width: 64,
+                        height: 64,
+                      ),
                       const SizedBox(height: 8),
                       Text(
-                        'GestionERP Móvil',
+                        'LABGE Móvil',
                         style: Theme.of(context)
                             .textTheme
                             .headlineSmall

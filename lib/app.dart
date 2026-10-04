@@ -43,7 +43,7 @@ class GestionErpMovilApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
-        title: 'GestionERP Móvil',
+        title: 'LABGE Móvil',
         builder: (context, child) => UpdateGate(
           controller: context.read<UpdateController>(),
           navigatorKey: rootNavigatorKey,
